@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authApi, setAccessToken } from '@/api/client'
 import { useAuth } from '@/contexts/AuthContext'
@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { startRegistration } from '@simplewebauthn/browser'
 import { Trash2, Plus, Shield, Mail, Key } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
+import QRCode from 'qrcode'
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
@@ -103,6 +104,17 @@ function ChangePasswordCard() {
 function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']; onUpdate: () => Promise<void> }) {
   const [showSetup, setShowSetup] = useState(false)
   const [setupData, setSetupData] = useState<{ secret: string; uri: string } | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (setupData?.uri) {
+      QRCode.toDataURL(setupData.uri, { width: 200, margin: 2 })
+        .then(setQrDataUrl)
+        .catch(() => setQrDataUrl(null))
+    } else {
+      setQrDataUrl(null)
+    }
+  }, [setupData?.uri])
   const [code, setCode] = useState('')
   const [backupCodes, setBackupCodes] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -199,8 +211,11 @@ function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']
               <p className="text-sm text-muted-foreground">
                 Scan this QR code with your authenticator app, then enter the 6-digit code.
               </p>
-              <div className="bg-muted rounded-md p-3">
-                <p className="text-xs font-mono break-all">{setupData.uri}</p>
+              <div className="flex justify-center bg-white rounded-md p-3">
+                {qrDataUrl
+                  ? <img src={qrDataUrl} alt="TOTP QR code" width={200} height={200} />
+                  : <p className="text-xs font-mono break-all text-black">{setupData.uri}</p>
+                }
               </div>
               <p className="text-xs text-muted-foreground">
                 Or manually enter the secret: <span className="font-mono">{setupData.secret}</span>
