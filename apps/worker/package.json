@@ -1,0 +1,24 @@
+{
+  "name": "@shortlink/worker",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply shortlink --local",
+    "db:migrate": "wrangler d1 migrations apply shortlink"
+  },
+  "dependencies": {
+    "hono": "^4.6.12",
+    "jose": "^5.9.6",
+    "otpauth": "^9.3.6",
+    "@simplewebauthn/server": "^10.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241205.0",
+    "typescript": "^5.7.2",
+    "wrangler": "^4.0.0"
+  }
+}

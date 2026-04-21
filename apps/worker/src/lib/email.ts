@@ -1,0 +1,103 @@
+import type { Env } from '../types.js'
+import { getCachedSetting, setCachedSetting } from './kv.js'
+import { sendViaSMTP } from './smtp.js'
+
+interface EmailPayload {
+  to: string
+  subject: string
+  html: string
+}
+
+// Read a setting from KV cache → DB, then populate the cache on a miss.
+async function getSetting(env: Env, key: string): Promise<string> {
+  const cached = await getCachedSetting(env.LINKS_KV, key)
+  if (cached !== null) return cached
+
+  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?1')
+    .bind(key)
+    .first<{ value: string }>()
+  const value = row?.value ?? ''
+  await setCachedSetting(env.LINKS_KV, key, value)
+  return value
+}
+
+export async function sendEmail(env: Env, payload: EmailPayload): Promise<void> {
+  const provider = await getSetting(env, 'email_provider')
+
+  if (provider === 'smtp') {
+    const [host, portStr, user, pass, from] = await Promise.all([
+      getSetting(env, 'smtp_host'),
+      getSetting(env, 'smtp_port'),
+      getSetting(env, 'smtp_user'),
+      getSetting(env, 'smtp_pass'),
+      getSetting(env, 'smtp_from'),
+    ])
+
+    if (!host || !from) {
+      throw new Error('SMTP is selected as email provider but smtp_host or smtp_from is not configured')
+    }
+
+    const port = parseInt(portStr, 10) || 587
+
+    await sendViaSMTP(
+      { host, port, user, pass, from },
+      payload.to,
+      payload.subject,
+      payload.html,
+    )
+    return
+  }
+
+  // Default: Resend — all config read from settings table
+  const [apiKey, fromDomain, fromName] = await Promise.all([
+    getSetting(env, 'resend_api_key'),
+    getSetting(env, 'email_from_domain'),
+    getSetting(env, 'email_from_name'),
+  ])
+
+  if (!apiKey || !fromDomain) {
+    throw new Error('Resend is selected as email provider but resend_api_key or email_from_domain is not configured in admin settings')
+  }
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `${fromName} <noreply@${fromDomain}>`,
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.html,
+    }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Resend error ${res.status}: ${text}`)
+  }
+}
+
+// M-1: Escape HTML special characters so a malicious app_name cannot inject markup.
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+export function otpEmailHtml(appName: string, code: string): string {
+  const safeApp = escHtml(appName)
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:0 16px">
+  <h2 style="color:#1a1a1a">${safeApp} — Verification Code</h2>
+  <p style="color:#444;font-size:15px">Your one-time verification code is:</p>
+  <div style="background:#f4f4f5;border-radius:8px;padding:24px;text-align:center;margin:24px 0">
+    <span style="font-size:36px;font-weight:700;letter-spacing:8px;color:#1a1a1a">${code}</span>
+  </div>
+  <p style="color:#888;font-size:13px">This code expires in 10 minutes. Do not share it with anyone.</p>
+</body>
+</html>
+  `.trim()
+}
