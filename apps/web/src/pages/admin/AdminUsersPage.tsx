@@ -3,19 +3,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { Search, Trash2 } from 'lucide-react'
+import { Search, Trash2, UserPlus } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTranslation } from '@/i18n'
 
 export default function AdminUsersPage() {
   const { user: currentUser } = useAuth()
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users', page, search],
@@ -44,11 +48,17 @@ export default function AdminUsersPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">Users</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold">{t('admin.users')}</h1>
+        <Button onClick={() => setShowCreate(true)}>
+          <UserPlus className="h-4 w-4" />
+          {t('admin.createUser')}
+        </Button>
+      </div>
       <div className="relative mb-4">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by email or username..."
+          placeholder={t('admin.searchUsersPlaceholder')}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           className="pl-9"
@@ -56,18 +66,18 @@ export default function AdminUsersPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
       ) : (
         <div className="rounded-md border">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left font-medium">User</th>
-                <th className="px-4 py-3 text-left font-medium">Role</th>
-                <th className="px-4 py-3 text-left font-medium">2FA</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-left font-medium">Joined</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
+                <th className="px-4 py-3 text-left font-medium">{t('common.user')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('admin.role')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('admin.twoFA')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('admin.joined')}</th>
+                <th className="px-4 py-3 text-right font-medium">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -86,8 +96,8 @@ export default function AdminUsersPage() {
                       }
                       className="text-sm border rounded px-2 py-1 bg-background"
                     >
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
+                      <option value="user">{t('common.user')}</option>
+                      <option value="admin">{t('common.admin')}</option>
                     </select>
                   </td>
                   <td className="px-4 py-3">
@@ -104,7 +114,7 @@ export default function AdminUsersPage() {
                       className="cursor-pointer"
                     >
                       <Badge variant={u.is_active ? 'success' : 'destructive'}>
-                        {u.is_active ? 'Active' : 'Inactive'}
+                        {u.is_active ? t('common.active') : t('common.inactive')}
                       </Badge>
                     </button>
                   </td>
@@ -131,32 +141,142 @@ export default function AdminUsersPage() {
 
       {data && data.pagination.pages > 1 && (
         <div className="flex justify-between items-center mt-4">
-          <span className="text-sm text-muted-foreground">{data.pagination.total} users</span>
+          <span className="text-sm text-muted-foreground">
+            {t('admin.totalUsers', { count: data.pagination.total })}
+          </span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <Button variant="outline" size="sm" disabled={page >= data.pagination.pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              {t('common.previous')}
+            </Button>
+            <Button variant="outline" size="sm" disabled={page >= data.pagination.pages} onClick={() => setPage((p) => p + 1)}>
+              {t('common.next')}
+            </Button>
           </div>
         </div>
       )}
 
+      {/* Create User Dialog */}
+      <CreateUserDialog
+        open={showCreate}
+        onOpenChange={setShowCreate}
+        onCreated={() => {
+          queryClient.invalidateQueries({ queryKey: ['admin-users'] })
+          setShowCreate(false)
+        }}
+      />
+
       <Dialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete User</DialogTitle>
-            <DialogDescription>This will permanently delete the user and all their links.</DialogDescription>
+            <DialogTitle>{t('admin.deleteUser')}</DialogTitle>
+            <DialogDescription>{t('admin.deleteUserDesc')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>{t('common.cancel')}</Button>
             <Button
               variant="destructive"
               loading={deleteMutation.isPending}
               onClick={() => deleteId && deleteMutation.mutate(deleteId)}
             >
-              Delete
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// ─── Create User Dialog ────────────────────────────────────────────────────────
+
+function CreateUserDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onCreated: () => void
+}) {
+  const { t } = useTranslation()
+  const [form, setForm] = useState({ email: '', username: '', password: '', role: 'user' as 'admin' | 'user' })
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await adminApi.createUser(form)
+      toast.success('User created')
+      setForm({ email: '', username: '', password: '', role: 'user' })
+      onCreated()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create user')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('admin.createUserTitle')}</DialogTitle>
+          <DialogDescription>{t('admin.createUserDesc')}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <Label>{t('auth.email')}</Label>
+            <Input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              required
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>{t('auth.username')}</Label>
+            <Input
+              type="text"
+              value={form.username}
+              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              required
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>{t('auth.password')}</Label>
+            <Input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              required
+              autoComplete="new-password"
+              minLength={8}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>{t('admin.role')}</Label>
+            <select
+              value={form.role}
+              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as 'admin' | 'user' }))}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+            >
+              <option value="user">{t('common.user')}</option>
+              <option value="admin">{t('common.admin')}</option>
+            </select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button type="submit" loading={loading}>
+              {t('common.create')}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

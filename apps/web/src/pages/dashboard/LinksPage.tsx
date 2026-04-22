@@ -10,9 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from 'sonner'
 import { Copy, ExternalLink, BarChart2, Pencil, Trash2, Plus, Search } from 'lucide-react'
 import { buildShortUrl, copyToClipboard, expiryLabel, isExpired, formatDate } from '@/lib/utils'
+import { useTranslation } from '@/i18n'
 
 export default function LinksPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -38,43 +40,39 @@ export default function LinksPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">My Links</h1>
+        <h1 className="text-2xl font-semibold">{t('links.title')}</h1>
         <Button onClick={() => setShowCreate(true)}>
           <Plus className="h-4 w-4" />
-          Create Link
+          {t('links.createLink')}
         </Button>
       </div>
 
-      {/* Search */}
       <div className="relative mb-4">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search links..."
+          placeholder={t('links.searchPlaceholder')}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           className="pl-9"
         />
       </div>
 
-      {/* Table */}
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
       ) : !data?.links.length ? (
-        <div className="text-center py-12 text-muted-foreground">
-          No links yet. Create your first one!
-        </div>
+        <div className="text-center py-12 text-muted-foreground">{t('links.noLinks')}</div>
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="px-4 py-3 text-left font-medium w-12">#</th>
-                <th className="px-4 py-3 text-left font-medium">Short Link</th>
-                <th className="px-4 py-3 text-left font-medium">Destination</th>
-                <th className="px-4 py-3 text-left font-medium">Expiry</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-left font-medium">Created</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
+                <th className="px-4 py-3 text-left font-medium">{t('links.shortLink')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('links.destination')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('links.expiry')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('common.created')}</th>
+                <th className="px-4 py-3 text-right font-medium">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -112,11 +110,11 @@ export default function LinksPage() {
                   <td className="px-4 py-3 text-muted-foreground">{expiryLabel(link.expires_at)}</td>
                   <td className="px-4 py-3">
                     {!link.is_active ? (
-                      <Badge variant="secondary">Inactive</Badge>
+                      <Badge variant="secondary">{t('common.inactive')}</Badge>
                     ) : isExpired(link.expires_at) ? (
-                      <Badge variant="destructive">Expired</Badge>
+                      <Badge variant="destructive">{t('common.expired')}</Badge>
                     ) : (
-                      <Badge variant="success">Active</Badge>
+                      <Badge variant="success">{t('common.active')}</Badge>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(link.created_at)}</td>
@@ -149,11 +147,10 @@ export default function LinksPage() {
         </div>
       )}
 
-      {/* Pagination */}
       {data && data.pagination.pages > 1 && (
         <div className="flex items-center justify-between mt-4">
           <span className="text-sm text-muted-foreground">
-            {data.pagination.total} total links
+            {t('links.totalLinks', { count: data.pagination.total })}
           </span>
           <div className="flex gap-2">
             <Button
@@ -162,7 +159,7 @@ export default function LinksPage() {
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
             >
-              Previous
+              {t('common.previous')}
             </Button>
             <Button
               variant="outline"
@@ -170,13 +167,12 @@ export default function LinksPage() {
               disabled={page >= data.pagination.pages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Next
+              {t('common.next')}
             </Button>
           </div>
         </div>
       )}
 
-      {/* Create Dialog */}
       <CreateLinkDialog
         open={showCreate}
         onOpenChange={setShowCreate}
@@ -186,7 +182,6 @@ export default function LinksPage() {
         }}
       />
 
-      {/* Edit Dialog */}
       {editLink && (
         <EditLinkDialog
           link={editLink}
@@ -199,25 +194,22 @@ export default function LinksPage() {
         />
       )}
 
-      {/* Delete confirm */}
       <Dialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Link</DialogTitle>
-            <DialogDescription>
-              This action cannot be undone. The short link will stop working immediately.
-            </DialogDescription>
+            <DialogTitle>{t('links.deleteTitle')}</DialogTitle>
+            <DialogDescription>{t('links.deleteDesc')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
               loading={deleteMutation.isPending}
               onClick={() => deleteId && deleteMutation.mutate(deleteId)}
             >
-              Delete
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -237,6 +229,7 @@ function CreateLinkDialog({
   onOpenChange: (o: boolean) => void
   onCreated: () => void
 }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState<CreateLinkPayload>({ destinationUrl: '' })
   const [expiryOption, setExpiryOption] = useState<'never' | '1' | '7' | '30' | 'custom'>('never')
   const [loading, setLoading] = useState(false)
@@ -265,11 +258,11 @@ function CreateLinkDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create Short Link</DialogTitle>
+          <DialogTitle>{t('links.createTitle')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <Label htmlFor="url">Destination URL *</Label>
+            <Label htmlFor="url">{t('links.destinationUrl')}</Label>
             <Input
               id="url"
               type="url"
@@ -280,27 +273,27 @@ function CreateLinkDialog({
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="slug">Custom slug (optional)</Label>
+            <Label htmlFor="slug">{t('links.customSlug')}</Label>
             <Input
               id="slug"
               type="text"
-              placeholder="my-link (leave blank for random)"
+              placeholder={t('links.slugPlaceholder')}
               value={form.customSlug ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, customSlug: e.target.value || undefined }))}
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="title">Title (optional)</Label>
+            <Label htmlFor="title">{t('links.titleField')}</Label>
             <Input
               id="title"
               type="text"
-              placeholder="My awesome link"
+              placeholder={t('links.titlePlaceholder')}
               value={form.title ?? ''}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value || undefined }))}
             />
           </div>
           <div className="space-y-2">
-            <Label>Expiry</Label>
+            <Label>{t('links.expiryLabel')}</Label>
             <div className="flex flex-wrap gap-2">
               {(['never', '1', '7', '30', 'custom'] as const).map((opt) => (
                 <button
@@ -313,7 +306,7 @@ function CreateLinkDialog({
                       : 'border-input hover:bg-accent'
                   }`}
                 >
-                  {opt === 'never' ? 'Never' : opt === 'custom' ? 'Custom' : `${opt}d`}
+                  {opt === 'never' ? t('links.never') : opt === 'custom' ? t('links.custom') : `${opt}d`}
                 </button>
               ))}
             </div>
@@ -333,10 +326,10 @@ function CreateLinkDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={loading}>
-              Create
+              {t('common.create')}
             </Button>
           </DialogFooter>
         </form>
@@ -358,6 +351,7 @@ export function EditLinkDialog({
   onOpenChange: (o: boolean) => void
   onUpdated: () => void
 }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState({
     destinationUrl: link.destination_url,
     customSlug: link.slug,
@@ -395,11 +389,11 @@ export function EditLinkDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit Link</DialogTitle>
+          <DialogTitle>{t('links.editTitle')}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <Label>Destination URL</Label>
+            <Label>{t('links.destinationUrl')}</Label>
             <Input
               type="url"
               value={form.destinationUrl}
@@ -408,7 +402,7 @@ export function EditLinkDialog({
             />
           </div>
           <div className="space-y-1">
-            <Label>Slug</Label>
+            <Label>{t('links.shortLink')}</Label>
             <Input
               value={form.customSlug}
               onChange={(e) => setForm((f) => ({ ...f, customSlug: e.target.value }))}
@@ -416,14 +410,14 @@ export function EditLinkDialog({
             />
           </div>
           <div className="space-y-1">
-            <Label>Title</Label>
+            <Label>{t('links.titleField')}</Label>
             <Input
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
             />
           </div>
           <div className="space-y-1">
-            <Label>Expiry (leave empty for no expiry)</Label>
+            <Label>{t('links.expiryFieldLabel')}</Label>
             <Input
               type="datetime-local"
               value={expiresAtInputValue}
@@ -442,14 +436,14 @@ export function EditLinkDialog({
               onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
               className="h-4 w-4"
             />
-            <Label htmlFor="active">Active</Label>
+            <Label htmlFor="active">{t('links.activeLabel')}</Label>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" loading={loading}>
-              Save
+              {t('common.save')}
             </Button>
           </DialogFooter>
         </form>

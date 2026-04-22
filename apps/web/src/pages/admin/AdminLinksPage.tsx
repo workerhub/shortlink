@@ -10,8 +10,10 @@ import { Search, Trash2, ExternalLink, Pencil } from 'lucide-react'
 import { isExpired, formatDate } from '@/lib/utils'
 import { EditLinkDialog } from '@/pages/dashboard/LinksPage'
 import type { Link } from '@/api/client'
+import { useTranslation } from '@/i18n'
 
 export default function AdminLinksPage() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -35,11 +37,11 @@ export default function AdminLinksPage() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-semibold mb-6">All Links</h1>
+      <h1 className="text-2xl font-semibold mb-6">{t('admin.allLinks')}</h1>
       <div className="relative mb-4">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by slug or URL..."
+          placeholder={t('admin.searchLinksPlaceholder')}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           className="pl-9"
@@ -47,19 +49,19 @@ export default function AdminLinksPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
       ) : (
         <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="px-4 py-3 text-left font-medium w-12">#</th>
-                <th className="px-4 py-3 text-left font-medium">Slug</th>
-                <th className="px-4 py-3 text-left font-medium">Destination</th>
-                <th className="px-4 py-3 text-left font-medium">User</th>
-                <th className="px-4 py-3 text-left font-medium">Status</th>
-                <th className="px-4 py-3 text-left font-medium">Created</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
+                <th className="px-4 py-3 text-left font-medium">{t('links.shortLink')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('links.destination')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('common.user')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('common.status')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('common.created')}</th>
+                <th className="px-4 py-3 text-right font-medium">{t('common.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -78,11 +80,11 @@ export default function AdminLinksPage() {
                   <td className="px-4 py-3 text-muted-foreground">{link.user_username}</td>
                   <td className="px-4 py-3">
                     {!link.is_active ? (
-                      <Badge variant="secondary">Inactive</Badge>
+                      <Badge variant="secondary">{t('common.inactive')}</Badge>
                     ) : isExpired(link.expires_at) ? (
-                      <Badge variant="destructive">Expired</Badge>
+                      <Badge variant="destructive">{t('common.expired')}</Badge>
                     ) : (
-                      <Badge variant="success">Active</Badge>
+                      <Badge variant="success">{t('common.active')}</Badge>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(link.created_at)}</td>
@@ -110,15 +112,20 @@ export default function AdminLinksPage() {
 
       {data && data.pagination.pages > 1 && (
         <div className="flex justify-between items-center mt-4">
-          <span className="text-sm text-muted-foreground">{data.pagination.total} links</span>
+          <span className="text-sm text-muted-foreground">
+            {t('admin.totalLinks', { count: data.pagination.total })}
+          </span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <Button variant="outline" size="sm" disabled={page >= data.pagination.pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              {t('common.previous')}
+            </Button>
+            <Button variant="outline" size="sm" disabled={page >= data.pagination.pages} onClick={() => setPage((p) => p + 1)}>
+              {t('common.next')}
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Edit Dialog */}
       {editLink && (
         <EditLinkDialog
           link={editLink}
@@ -134,17 +141,17 @@ export default function AdminLinksPage() {
       <Dialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Link</DialogTitle>
-            <DialogDescription>This will permanently delete the short link.</DialogDescription>
+            <DialogTitle>{t('admin.deleteLink')}</DialogTitle>
+            <DialogDescription>{t('admin.deleteLinkDesc')}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>{t('common.cancel')}</Button>
             <Button
               variant="destructive"
               loading={deleteMutation.isPending}
               onClick={() => deleteId && deleteMutation.mutate(deleteId)}
             >
-              Delete
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

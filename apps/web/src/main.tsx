@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
 import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
+import { ThemeProvider } from './contexts/ThemeContext.tsx'
+import { AppConfigProvider } from './contexts/AppConfigContext.tsx'
+import { I18nProvider } from './i18n/index.tsx'
 import './styles/globals.css'
 
 const queryClient = new QueryClient({
@@ -18,13 +21,19 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <App />
-          <Toaster richColors position="top-right" />
-        </AuthProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <I18nProvider>
+        <BrowserRouter>
+          <QueryClientProvider client={queryClient}>
+            <AppConfigProvider>
+              <AuthProvider>
+                <App />
+                <Toaster richColors position="top-right" />
+              </AuthProvider>
+            </AppConfigProvider>
+          </QueryClientProvider>
+        </BrowserRouter>
+      </I18nProvider>
+    </ThemeProvider>
   </React.StrictMode>,
 )

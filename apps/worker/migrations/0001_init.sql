@@ -1,9 +1,6 @@
--- ShortLink D1 Schema
--- Migration: 0001_init.sql
+-- Merged schema: all tables from migrations 0001–0006
+-- This is the canonical schema for a fresh deployment.
 
--- ─────────────────────────────────────────────
--- Users
--- ─────────────────────────────────────────────
 CREATE TABLE users (
   id            TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   email         TEXT    UNIQUE NOT NULL,
@@ -20,9 +17,6 @@ CREATE TABLE users (
   updated_at    INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
--- ─────────────────────────────────────────────
--- Passkeys (WebAuthn credentials)
--- ─────────────────────────────────────────────
 CREATE TABLE passkeys (
   id            TEXT    PRIMARY KEY,
   user_id       TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -34,12 +28,8 @@ CREATE TABLE passkeys (
   created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
   last_used_at  INTEGER
 );
-
 CREATE INDEX idx_passkeys_user_id ON passkeys(user_id);
 
--- ─────────────────────────────────────────────
--- Short links
--- ─────────────────────────────────────────────
 CREATE TABLE links (
   id              TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   user_id         TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -48,17 +38,14 @@ CREATE TABLE links (
   title           TEXT,
   expires_at      INTEGER,
   is_active       INTEGER NOT NULL DEFAULT 1,
+  user_seq        INTEGER NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at      INTEGER NOT NULL DEFAULT (unixepoch())
 );
-
 CREATE INDEX idx_links_slug       ON links(slug);
 CREATE INDEX idx_links_user_id    ON links(user_id);
 CREATE INDEX idx_links_expires_at ON links(expires_at) WHERE expires_at IS NOT NULL;
 
--- ─────────────────────────────────────────────
--- Click logs
--- ─────────────────────────────────────────────
 CREATE TABLE click_logs (
   id          TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   link_id     TEXT    NOT NULL REFERENCES links(id) ON DELETE CASCADE,
@@ -72,14 +59,10 @@ CREATE TABLE click_logs (
   os          TEXT,
   created_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
-
 CREATE INDEX idx_click_logs_link_id    ON click_logs(link_id);
 CREATE INDEX idx_click_logs_created_at ON click_logs(created_at);
 CREATE INDEX idx_click_logs_link_time  ON click_logs(link_id, created_at);
 
--- ─────────────────────────────────────────────
--- Email OTP / verification tokens
--- ─────────────────────────────────────────────
 CREATE TABLE verifications (
   id          TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   identifier  TEXT    NOT NULL,
@@ -90,18 +73,42 @@ CREATE TABLE verifications (
   used        INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
-
 CREATE INDEX idx_verifications_identifier ON verifications(identifier, type);
 
--- ─────────────────────────────────────────────
--- Global settings
--- ─────────────────────────────────────────────
 CREATE TABLE settings (
   key        TEXT    PRIMARY KEY,
   value      TEXT    NOT NULL,
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
-
 INSERT INTO settings (key, value) VALUES
   ('registration_enabled', 'false'),
-  ('app_name', 'ShortLink');
+  ('app_name',             'ShortLink'),
+  ('email_provider',       'resend'),
+  ('smtp_host',            ''),
+  ('smtp_port',            '587'),
+  ('smtp_user',            ''),
+  ('smtp_pass',            ''),
+  ('smtp_from',            ''),
+  ('resend_api_key',       ''),
+  ('email_from_domain',    ''),
+  ('email_from_name',      '');
+
+CREATE TABLE audit_logs (
+  id         TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+  admin_id   TEXT REFERENCES users(id) ON DELETE SET NULL,
+  action     TEXT NOT NULL,
+  target_id  TEXT NOT NULL,
+  details    TEXT,
+  created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+CREATE INDEX idx_audit_logs_admin_id   ON audit_logs(admin_id);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+CREATE INDEX idx_audit_logs_target_id  ON audit_logs(target_id);
+
+CREATE TABLE totp_used (
+  user_id TEXT NOT NULL,
+  code    TEXT NOT NULL,
+  used_at INTEGER NOT NULL DEFAULT (unixepoch()),
+  PRIMARY KEY (user_id, code)
+);
+CREATE INDEX idx_totp_used_at ON totp_used(used_at);

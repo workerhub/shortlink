@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authApi, setAccessToken } from '@/api/client'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTheme, type Theme } from '@/contexts/ThemeContext'
+import { useTranslation, type Lang } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,10 +18,12 @@ import QRCode from 'qrcode'
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
+  const { t } = useTranslation()
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
-      <h1 className="text-2xl font-semibold">Account Settings</h1>
+      <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
+      <PreferencesCard />
       <ChangePasswordCard />
       <TotpCard user={user} onUpdate={refreshUser} />
       <PasskeyCard onUpdate={refreshUser} />
@@ -28,16 +32,83 @@ export default function SettingsPage() {
   )
 }
 
+// ─── Preferences ──────────────────────────────────────────────────────────────
+
+function PreferencesCard() {
+  const { t, lang, setLang } = useTranslation()
+  const { theme, setTheme } = useTheme()
+
+  const themes: { value: Theme; label: string }[] = [
+    { value: 'light', label: t('settings.light') },
+    { value: 'dark', label: t('settings.dark') },
+    { value: 'system', label: t('settings.system') },
+  ]
+
+  const langs: { value: Lang; label: string }[] = [
+    { value: 'en', label: 'English' },
+    { value: 'zh-CN', label: '中文' },
+  ]
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t('settings.preferences')}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>{t('settings.language')}</Label>
+          <div className="flex gap-2">
+            {langs.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setLang(value)}
+                className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                  lang === value
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-input hover:bg-accent'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label>{t('settings.theme')}</Label>
+          <div className="flex gap-2">
+            {themes.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTheme(value)}
+                className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                  theme === value
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-input hover:bg-accent'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 // ─── Change Password ──────────────────────────────────────────────────────────
 
 function ChangePasswordCard() {
+  const { t } = useTranslation()
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirm: '' })
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (form.newPassword !== form.confirm) {
-      toast.error('Passwords do not match')
+      toast.error(t('settings.passwordsDoNotMatch'))
       return
     }
     setLoading(true)
@@ -55,12 +126,12 @@ function ChangePasswordCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Change Password</CardTitle>
+        <CardTitle className="text-base">{t('settings.changePassword')}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1">
-            <Label>Current Password</Label>
+            <Label>{t('settings.currentPassword')}</Label>
             <Input
               type="password"
               value={form.currentPassword}
@@ -70,7 +141,7 @@ function ChangePasswordCard() {
             />
           </div>
           <div className="space-y-1">
-            <Label>New Password</Label>
+            <Label>{t('settings.newPassword')}</Label>
             <Input
               type="password"
               value={form.newPassword}
@@ -81,7 +152,7 @@ function ChangePasswordCard() {
             />
           </div>
           <div className="space-y-1">
-            <Label>Confirm New Password</Label>
+            <Label>{t('settings.confirmPassword')}</Label>
             <Input
               type="password"
               value={form.confirm}
@@ -91,7 +162,7 @@ function ChangePasswordCard() {
             />
           </div>
           <Button type="submit" size="sm" loading={loading}>
-            Update Password
+            {t('settings.updatePassword')}
           </Button>
         </form>
       </CardContent>
@@ -102,6 +173,7 @@ function ChangePasswordCard() {
 // ─── TOTP ─────────────────────────────────────────────────────────────────────
 
 function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']; onUpdate: () => Promise<void> }) {
+  const { t } = useTranslation()
   const [showSetup, setShowSetup] = useState(false)
   const [setupData, setSetupData] = useState<{ secret: string; uri: string } | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
@@ -172,21 +244,23 @@ function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Shield className="h-4 w-4" />
-            <CardTitle className="text-base">Authenticator App (TOTP)</CardTitle>
+            <CardTitle className="text-base">{t('settings.totp')}</CardTitle>
           </div>
-          <Badge variant={enabled ? 'success' : 'secondary'}>{enabled ? 'Enabled' : 'Disabled'}</Badge>
+          <Badge variant={enabled ? 'success' : 'secondary'}>
+            {enabled ? t('settings.enabled') : t('settings.disabled')}
+          </Badge>
         </div>
-        <CardDescription>Use an authenticator app like Google Authenticator</CardDescription>
+        <CardDescription>{t('settings.totpDesc')}</CardDescription>
       </CardHeader>
       <CardContent>
         {!enabled ? (
           <Button size="sm" onClick={startSetup} loading={loading}>
             <Plus className="h-4 w-4" />
-            Enable TOTP
+            {t('settings.enableTotp')}
           </Button>
         ) : (
           <Button size="sm" variant="destructive" onClick={() => setShowDisableDialog(true)} loading={loading}>
-            Disable TOTP
+            {t('settings.disableTotp')}
           </Button>
         )}
       </CardContent>
@@ -194,23 +268,21 @@ function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']
       <Dialog open={showSetup} onOpenChange={(o) => { if (!o) { setShowSetup(false); setSetupData(null); setCode(''); setBackupCodes([]) } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Set Up Authenticator App</DialogTitle>
+            <DialogTitle>{t('settings.setUpAuthApp')}</DialogTitle>
           </DialogHeader>
           {backupCodes.length > 0 ? (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                TOTP enabled! Save these backup codes — they will not be shown again.
-              </p>
+              <p className="text-sm text-muted-foreground">{t('settings.totpEnabled')}</p>
               <div className="bg-muted rounded-md p-3 font-mono text-sm grid grid-cols-2 gap-1">
                 {backupCodes.map((c) => <div key={c}>{c}</div>)}
               </div>
-              <Button className="w-full" onClick={() => { setShowSetup(false); setBackupCodes([]) }}>Done</Button>
+              <Button className="w-full" onClick={() => { setShowSetup(false); setBackupCodes([]) }}>
+                {t('settings.done')}
+              </Button>
             </div>
           ) : setupData ? (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Scan this QR code with your authenticator app, then enter the 6-digit code.
-              </p>
+              <p className="text-sm text-muted-foreground">{t('settings.scanQrCode')}</p>
               <div className="flex justify-center bg-white rounded-md p-3">
                 {qrDataUrl
                   ? <img src={qrDataUrl} alt="TOTP QR code" width={200} height={200} />
@@ -218,7 +290,7 @@ function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']
                 }
               </div>
               <p className="text-xs text-muted-foreground">
-                Or manually enter the secret: <span className="font-mono">{setupData.secret}</span>
+                {t('settings.manualSecret')} <span className="font-mono">{setupData.secret}</span>
               </p>
               <form onSubmit={confirmSetup} className="space-y-3">
                 <Input
@@ -233,31 +305,34 @@ function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']
                   autoComplete="one-time-code"
                 />
                 <Button type="submit" className="w-full" loading={loading} disabled={code.length < 6}>
-                  Confirm
+                  {t('settings.confirm')}
                 </Button>
               </form>
             </div>
           ) : null}
         </DialogContent>
       </Dialog>
+
       <Dialog open={showDisableDialog} onOpenChange={(o) => { if (!o) { setShowDisableDialog(false); setDisablePassword('') } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Disable TOTP</DialogTitle>
-            <DialogDescription>Enter your current password to confirm.</DialogDescription>
+            <DialogTitle>{t('settings.disableTotp')}</DialogTitle>
+            <DialogDescription>{t('settings.confirmCurrentPassword')}</DialogDescription>
           </DialogHeader>
           <Input
             type="password"
-            placeholder="Current password"
+            placeholder={t('settings.currentPassword')}
             value={disablePassword}
             onChange={(e) => setDisablePassword(e.target.value)}
             autoFocus
             autoComplete="current-password"
           />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { setShowDisableDialog(false); setDisablePassword('') }}>Cancel</Button>
+            <Button variant="ghost" onClick={() => { setShowDisableDialog(false); setDisablePassword('') }}>
+              {t('common.cancel')}
+            </Button>
             <Button variant="destructive" onClick={disable} loading={loading} disabled={!disablePassword}>
-              Disable
+              {t('settings.disable')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -267,6 +342,7 @@ function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']
 }
 
 function PasskeyCard({ onUpdate }: { onUpdate: () => Promise<void> }) {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { data } = useQuery({
     queryKey: ['passkeys'],
@@ -316,16 +392,18 @@ function PasskeyCard({ onUpdate }: { onUpdate: () => Promise<void> }) {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Key className="h-4 w-4" />
-          <CardTitle className="text-base">Passkeys</CardTitle>
+          <CardTitle className="text-base">{t('settings.passkeys')}</CardTitle>
         </div>
-        <CardDescription>Use biometrics or security keys to verify</CardDescription>
+        <CardDescription>{t('settings.passkeysDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {data?.passkeys.map((pk) => (
           <div key={pk.id} className="flex items-center justify-between border rounded-md px-3 py-2 text-sm">
             <div>
-              <p className="font-medium">{pk.name ?? 'Unnamed key'}</p>
-              <p className="text-muted-foreground text-xs">Added {formatDate(pk.created_at)}</p>
+              <p className="font-medium">{pk.name ?? t('settings.unnamedKey')}</p>
+              <p className="text-muted-foreground text-xs">
+                {t('settings.added', { date: formatDate(pk.created_at) })}
+              </p>
             </div>
             <Button variant="ghost" size="icon" onClick={() => setDeleteId(pk.id)} className="text-destructive hover:text-destructive">
               <Trash2 className="h-4 w-4" />
@@ -334,37 +412,38 @@ function PasskeyCard({ onUpdate }: { onUpdate: () => Promise<void> }) {
         ))}
         <div className="flex gap-2 pt-1">
           <Input
-            placeholder="Key name (optional)"
+            placeholder={t('settings.keyName')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             className="max-w-xs"
           />
           <Button size="sm" onClick={register} loading={loading}>
             <Plus className="h-4 w-4" />
-            Add Passkey
+            {t('settings.addPasskey')}
           </Button>
         </div>
       </CardContent>
 
-      {/* H-3: Password confirmation required to remove a passkey */}
       <Dialog open={!!deleteId} onOpenChange={(o) => { if (!o) { setDeleteId(null); setDeletePassword('') } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove Passkey</DialogTitle>
-            <DialogDescription>Enter your current password to confirm removal.</DialogDescription>
+            <DialogTitle>{t('settings.removePasskey')}</DialogTitle>
+            <DialogDescription>{t('settings.removePasskeyDesc')}</DialogDescription>
           </DialogHeader>
           <Input
             type="password"
-            placeholder="Current password"
+            placeholder={t('settings.currentPassword')}
             value={deletePassword}
             onChange={(e) => setDeletePassword(e.target.value)}
             autoFocus
             autoComplete="current-password"
           />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { setDeleteId(null); setDeletePassword('') }}>Cancel</Button>
+            <Button variant="ghost" onClick={() => { setDeleteId(null); setDeletePassword('') }}>
+              {t('common.cancel')}
+            </Button>
             <Button variant="destructive" onClick={deletePasskey} loading={loading} disabled={!deletePassword}>
-              Remove
+              {t('settings.remove')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -376,6 +455,7 @@ function PasskeyCard({ onUpdate }: { onUpdate: () => Promise<void> }) {
 // ─── Email OTP ────────────────────────────────────────────────────────────────
 
 function EmailOtpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']; onUpdate: () => Promise<void> }) {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [disablePassword, setDisablePassword] = useState('')
   const [showDisableDialog, setShowDisableDialog] = useState(false)
@@ -415,11 +495,13 @@ function EmailOtpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['us
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
-            <CardTitle className="text-base">Email OTP</CardTitle>
+            <CardTitle className="text-base">{t('settings.emailOtp')}</CardTitle>
           </div>
-          <Badge variant={enabled ? 'success' : 'secondary'}>{enabled ? 'Enabled' : 'Disabled'}</Badge>
+          <Badge variant={enabled ? 'success' : 'secondary'}>
+            {enabled ? t('settings.enabled') : t('settings.disabled')}
+          </Badge>
         </div>
-        <CardDescription>Receive a one-time code via email when signing in</CardDescription>
+        <CardDescription>{t('settings.emailOtpDesc')}</CardDescription>
       </CardHeader>
       <CardContent>
         <Button
@@ -428,28 +510,30 @@ function EmailOtpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['us
           onClick={enabled ? () => setShowDisableDialog(true) : enable}
           loading={loading}
         >
-          {enabled ? 'Disable Email OTP' : 'Enable Email OTP'}
+          {enabled ? t('settings.disableEmailOtp') : t('settings.enableEmailOtp')}
         </Button>
       </CardContent>
 
       <Dialog open={showDisableDialog} onOpenChange={(o) => { if (!o) { setShowDisableDialog(false); setDisablePassword('') } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Disable Email OTP</DialogTitle>
-            <DialogDescription>Enter your current password to confirm.</DialogDescription>
+            <DialogTitle>{t('settings.disableEmailOtp')}</DialogTitle>
+            <DialogDescription>{t('settings.confirmCurrentPassword')}</DialogDescription>
           </DialogHeader>
           <Input
             type="password"
-            placeholder="Current password"
+            placeholder={t('settings.currentPassword')}
             value={disablePassword}
             onChange={(e) => setDisablePassword(e.target.value)}
             autoFocus
             autoComplete="current-password"
           />
           <DialogFooter>
-            <Button variant="ghost" onClick={() => { setShowDisableDialog(false); setDisablePassword('') }}>Cancel</Button>
+            <Button variant="ghost" onClick={() => { setShowDisableDialog(false); setDisablePassword('') }}>
+              {t('common.cancel')}
+            </Button>
             <Button variant="destructive" onClick={disable} loading={loading} disabled={!disablePassword}>
-              Disable
+              {t('settings.disable')}
             </Button>
           </DialogFooter>
         </DialogContent>

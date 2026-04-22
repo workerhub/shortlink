@@ -1,21 +1,25 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useAppConfig } from '@/contexts/AppConfigContext'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Link2, BarChart2, Settings, LogOut, Shield, Menu } from 'lucide-react'
-
-const navItems = [
-  { to: '/dashboard/links', label: 'Links', icon: Link2 },
-  { to: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
-  { to: '/dashboard/settings', label: 'Settings', icon: Settings },
-]
+import { useTranslation } from '@/i18n'
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth()
+  const { appName } = useAppConfig()
+  const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const navItems = [
+    { to: '/dashboard/links', label: t('nav.links'), icon: Link2 },
+    { to: '/dashboard/analytics', label: t('nav.analytics'), icon: BarChart2 },
+    { to: '/dashboard/settings', label: t('nav.settings'), icon: Settings },
+  ]
 
   const handleLogout = async () => {
     await logout()
@@ -38,7 +42,7 @@ export default function DashboardLayout() {
           className="font-bold text-lg hover:opacity-80 transition-opacity"
           onClick={() => setMobileOpen(false)}
         >
-          ShortLink
+          {appName}
         </Link>
       </div>
       <nav className="flex-1 p-3 space-y-1">
@@ -60,7 +64,7 @@ export default function DashboardLayout() {
             className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             <Shield className="h-4 w-4" />
-            Admin
+            {t('nav.admin')}
           </Link>
         )}
       </nav>
@@ -68,7 +72,7 @@ export default function DashboardLayout() {
         <div className="px-3 py-1 text-xs text-muted-foreground truncate mb-2">{user?.email}</div>
         <Button variant="ghost" size="sm" className="w-full justify-start" onClick={handleLogout}>
           <LogOut className="h-4 w-4" />
-          Logout
+          {t('nav.logout')}
         </Button>
       </div>
     </>
@@ -76,7 +80,6 @@ export default function DashboardLayout() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Mobile overlay backdrop */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 md:hidden"
@@ -84,7 +87,6 @@ export default function DashboardLayout() {
         />
       )}
 
-      {/* Sidebar — fixed on mobile (slides in), static on desktop */}
       <aside
         className={cn(
           'flex flex-col w-60 border-r bg-background',
@@ -95,15 +97,13 @@ export default function DashboardLayout() {
         {sidebarContent}
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Mobile top bar */}
         <div className="md:hidden flex items-center gap-3 px-4 py-3 border-b shrink-0">
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
           <Link to="/dashboard" className="font-bold text-lg">
-            ShortLink
+            {appName}
           </Link>
         </div>
 

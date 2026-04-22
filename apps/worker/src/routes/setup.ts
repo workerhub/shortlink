@@ -3,11 +3,24 @@ import type { Env, Variables } from '../types.js'
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 
-const MIGRATIONS: { name: string; sql: string }[] = [
-  {
-    name: '0001_init',
-    sql: `
-CREATE TABLE users (
+// ─── Table-prefix helper (mirrors src/lib/db.ts) ──────────────────────────────
+
+function tbl(prefix: string, name: string): string {
+  const p = prefix.replace(/[^a-zA-Z0-9_]/g, '')
+  return p ? `${p}_${name}` : name
+}
+
+// ─── Migration factory ────────────────────────────────────────────────────────
+// Returns migrations parameterised by the table prefix so setup works whether
+// TABLE_PREFIX is empty or set to a custom value.
+
+function getMigrations(p: string): { name: string; sql: string }[] {
+  const t = (name: string) => tbl(p, name)
+  return [
+    {
+      name: 'schema_v1',
+      sql: `
+CREATE TABLE IF NOT EXISTS ${t('users')} (
   id            TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   email         TEXT    UNIQUE NOT NULL,
   username      TEXT    UNIQUE NOT NULL,
@@ -22,9 +35,9 @@ CREATE TABLE users (
   created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at    INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE TABLE passkeys (
+CREATE TABLE IF NOT EXISTS ${t('passkeys')} (
   id            TEXT    PRIMARY KEY,
-  user_id       TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id       TEXT    NOT NULL REFERENCES ${t('users')}(id) ON DELETE CASCADE,
   public_key    TEXT    NOT NULL,
   counter       INTEGER NOT NULL DEFAULT 0,
   name          TEXT,
@@ -33,24 +46,25 @@ CREATE TABLE passkeys (
   created_at    INTEGER NOT NULL DEFAULT (unixepoch()),
   last_used_at  INTEGER
 );
-CREATE INDEX idx_passkeys_user_id ON passkeys(user_id);
-CREATE TABLE links (
+CREATE INDEX IF NOT EXISTS idx_passkeys_user_id ON ${t('passkeys')}(user_id);
+CREATE TABLE IF NOT EXISTS ${t('links')} (
   id              TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-  user_id         TEXT    NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id         TEXT    NOT NULL REFERENCES ${t('users')}(id) ON DELETE CASCADE,
   slug            TEXT    UNIQUE NOT NULL,
   destination_url TEXT    NOT NULL,
   title           TEXT,
   expires_at      INTEGER,
   is_active       INTEGER NOT NULL DEFAULT 1,
+  user_seq        INTEGER NOT NULL DEFAULT 0,
   created_at      INTEGER NOT NULL DEFAULT (unixepoch()),
   updated_at      INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE INDEX idx_links_slug       ON links(slug);
-CREATE INDEX idx_links_user_id    ON links(user_id);
-CREATE INDEX idx_links_expires_at ON links(expires_at) WHERE expires_at IS NOT NULL;
-CREATE TABLE click_logs (
+CREATE INDEX IF NOT EXISTS idx_links_slug       ON ${t('links')}(slug);
+CREATE INDEX IF NOT EXISTS idx_links_user_id    ON ${t('links')}(user_id);
+CREATE INDEX IF NOT EXISTS idx_links_expires_at ON ${t('links')}(expires_at) WHERE expires_at IS NOT NULL;
+CREATE TABLE IF NOT EXISTS ${t('click_logs')} (
   id          TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-  link_id     TEXT    NOT NULL REFERENCES links(id) ON DELETE CASCADE,
+  link_id     TEXT    NOT NULL REFERENCES ${t('links')}(id) ON DELETE CASCADE,
   ip_address  TEXT,
   user_agent  TEXT,
   referer     TEXT,
@@ -61,10 +75,10 @@ CREATE TABLE click_logs (
   os          TEXT,
   created_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE INDEX idx_click_logs_link_id    ON click_logs(link_id);
-CREATE INDEX idx_click_logs_created_at ON click_logs(created_at);
-CREATE INDEX idx_click_logs_link_time  ON click_logs(link_id, created_at);
-CREATE TABLE verifications (
+CREATE INDEX IF NOT EXISTS idx_click_logs_link_id    ON ${t('click_logs')}(link_id);
+CREATE INDEX IF NOT EXISTS idx_click_logs_created_at ON ${t('click_logs')}(created_at);
+CREATE INDEX IF NOT EXISTS idx_click_logs_link_time  ON ${t('click_logs')}(link_id, created_at);
+CREATE TABLE IF NOT EXISTS ${t('verifications')} (
   id          TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   identifier  TEXT    NOT NULL,
   type        TEXT    NOT NULL CHECK (type IN ('email_otp')),
@@ -74,89 +88,46 @@ CREATE TABLE verifications (
   used        INTEGER NOT NULL DEFAULT 0,
   created_at  INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE INDEX idx_verifications_identifier ON verifications(identifier, type);
-CREATE TABLE settings (
+CREATE INDEX IF NOT EXISTS idx_verifications_identifier ON ${t('verifications')}(identifier, type);
+CREATE TABLE IF NOT EXISTS ${t('settings')} (
   key        TEXT    PRIMARY KEY,
   value      TEXT    NOT NULL,
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
-INSERT INTO settings (key, value) VALUES ('registration_enabled', 'false'), ('app_name', 'ShortLink');
-`,
-  },
-  {
-    name: '0002_audit_log',
-    sql: `
-CREATE TABLE audit_logs (
+INSERT OR IGNORE INTO ${t('settings')} (key, value) VALUES
+  ('registration_enabled', 'false'),
+  ('app_name',             'ShortLink'),
+  ('email_provider',       'resend'),
+  ('smtp_host',            ''),
+  ('smtp_port',            '587'),
+  ('smtp_user',            ''),
+  ('smtp_pass',            ''),
+  ('smtp_from',            ''),
+  ('resend_api_key',       ''),
+  ('email_from_domain',    ''),
+  ('email_from_name',      '');
+CREATE TABLE IF NOT EXISTS ${t('audit_logs')} (
   id         TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-  admin_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  admin_id   TEXT REFERENCES ${t('users')}(id) ON DELETE SET NULL,
   action     TEXT NOT NULL,
   target_id  TEXT NOT NULL,
   details    TEXT,
   created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
-CREATE INDEX idx_audit_logs_admin_id   ON audit_logs(admin_id);
-CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
-CREATE INDEX idx_audit_logs_target_id  ON audit_logs(target_id);
-`,
-  },
-  {
-    name: '0003_totp_used',
-    sql: `
-CREATE TABLE totp_used (
+CREATE INDEX IF NOT EXISTS idx_audit_logs_admin_id   ON ${t('audit_logs')}(admin_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON ${t('audit_logs')}(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_target_id  ON ${t('audit_logs')}(target_id);
+CREATE TABLE IF NOT EXISTS ${t('totp_used')} (
   user_id TEXT NOT NULL,
   code    TEXT NOT NULL,
   used_at INTEGER NOT NULL DEFAULT (unixepoch()),
   PRIMARY KEY (user_id, code)
 );
-CREATE INDEX idx_totp_used_at ON totp_used(used_at);
-CREATE TABLE IF NOT EXISTS audit_logs_backup AS SELECT * FROM audit_logs;
-DROP TABLE IF EXISTS audit_logs;
-CREATE TABLE audit_logs (
-  id         TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-  admin_id   TEXT REFERENCES users(id) ON DELETE SET NULL,
-  action     TEXT NOT NULL,
-  target_id  TEXT NOT NULL,
-  details    TEXT,
-  created_at INTEGER NOT NULL DEFAULT (unixepoch())
-);
-CREATE INDEX idx_audit_logs_admin_id   ON audit_logs(admin_id);
-CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
-CREATE INDEX idx_audit_logs_target_id  ON audit_logs(target_id);
+CREATE INDEX IF NOT EXISTS idx_totp_used_at ON ${t('totp_used')}(used_at);
 `,
-  },
-  {
-    name: '0004_smtp_settings',
-    sql: `
-INSERT OR IGNORE INTO settings (key, value) VALUES
-  ('email_provider', 'resend'),
-  ('smtp_host',      ''),
-  ('smtp_port',      '587'),
-  ('smtp_user',      ''),
-  ('smtp_pass',      ''),
-  ('smtp_from',      '');
-`,
-  },
-  {
-    name: '0005_email_settings',
-    sql: `
-INSERT OR IGNORE INTO settings (key, value) VALUES
-  ('resend_api_key',    ''),
-  ('email_from_domain', ''),
-  ('email_from_name',   '');
-`,
-  },
-  {
-    name: '0006_link_seq',
-    sql: `
-ALTER TABLE links ADD COLUMN user_seq INTEGER NOT NULL DEFAULT 0;
-UPDATE links SET user_seq = (
-  SELECT COUNT(*)
-  FROM links l2
-  WHERE l2.user_id = links.user_id AND l2.rowid <= links.rowid
-);
-`,
-  },
-]
+    },
+  ]
+}
 
 // D1's exec() only processes the first line of a multi-line string.
 // Strip SQL line comments and collapse all whitespace to a single line.
@@ -178,6 +149,8 @@ app.get('/:secret', async (c) => {
     return c.notFound()
   }
 
+  const prefix = c.env.TABLE_PREFIX ?? ''
+
   // Use prepare().run() for single-statement DDL — avoids exec()'s newline limitation
   await c.env.DB.prepare(
     'CREATE TABLE IF NOT EXISTS _schema_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL DEFAULT (unixepoch()))',
@@ -188,7 +161,7 @@ app.get('/:secret', async (c) => {
 
   const log: { name: string; status: 'applied' | 'skipped' | 'error'; error?: string }[] = []
 
-  for (const migration of MIGRATIONS) {
+  for (const migration of getMigrations(prefix)) {
     if (applied.has(migration.name)) {
       log.push({ name: migration.name, status: 'skipped' })
       continue

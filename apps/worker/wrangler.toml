@@ -5,6 +5,9 @@ account_id = "CLOUDFLARE_ACCOUNT_ID_PLACEHOLDER"
 compatibility_flags = ["nodejs_compat"]
 keep_vars = true
 
+[telemetry]
+enabled = false
+
 [assets]
 directory = "../web/dist"
 binding = "ASSETS"
@@ -21,7 +24,8 @@ migrations_dir = "migrations"
 binding = "LINKS_KV"
 id = "KV_NAMESPACE_ID_PLACEHOLDER"
 
+[vars]
+TABLE_PREFIX = ""
 
 [triggers]
 crons = ["0 3 * * *"]
-

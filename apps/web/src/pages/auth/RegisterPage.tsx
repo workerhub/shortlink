@@ -6,8 +6,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
+import { useTranslation } from '@/i18n'
 
 export default function RegisterPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
@@ -32,13 +34,13 @@ export default function RegisterPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Create Account</CardTitle>
-          <CardDescription>Sign up to start shortening links</CardDescription>
+          <CardTitle className="text-2xl">{t('auth.createAccount')}</CardTitle>
+          <CardDescription>{t('auth.createAccountDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('auth.email')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -50,7 +52,7 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">{t('auth.username')}</Label>
               <Input
                 id="username"
                 type="text"
@@ -62,7 +64,7 @@ export default function RegisterPage() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('auth.password')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -72,16 +74,16 @@ export default function RegisterPage() {
                 autoComplete="new-password"
                 minLength={8}
               />
-              <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
+              <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
             </div>
             <Button type="submit" className="w-full" loading={loading}>
-              Create Account
+              {t('auth.createAccount')}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Already have an account?{' '}
+            {t('auth.alreadyAccount')}{' '}
             <Link to="/login" className="text-primary hover:underline">
-              Sign in
+              {t('auth.signInLink')}
             </Link>
           </p>
         </CardContent>

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am on monday"],
+  "timezone": "UTC",
+  "automerge": false,
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["patch"],
+      "automerge": true
+    },
+    {
+      "matchPackagePatterns": ["^@cloudflare/"],
+      "groupName": "Cloudflare packages"
+    },
+    {
+      "matchPackagePatterns": ["^@simplewebauthn/"],
+      "groupName": "SimpleWebAuthn packages"
+    },
+    {
+      "matchPackagePatterns": ["^@tanstack/"],
+      "groupName": "TanStack packages"
+    }
+  ]
+}

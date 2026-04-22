@@ -11,6 +11,7 @@ export interface Env {
   APP_URL: string
   RP_ID: string
   APP_ORIGIN: string
+  TABLE_PREFIX?: string
 
   // Secrets
   JWT_SECRET: string

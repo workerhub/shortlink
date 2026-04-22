@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/api/client'
+import { useAppConfig } from '@/contexts/AppConfigContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
+import { useTranslation } from '@/i18n'
 
 export default function AdminSettingsPage() {
+  const { t } = useTranslation()
+  const { reload: reloadAppConfig } = useAppConfig()
   const { data, isLoading } = useQuery({
     queryKey: ['admin-settings'],
     queryFn: adminApi.getSettings,
@@ -65,6 +69,7 @@ export default function AdminSettingsPage() {
     setSavingAppName(true)
     try {
       await adminApi.updateSettings({ app_name: appName })
+      reloadAppConfig()
       toast.success('App name updated')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed')
@@ -96,19 +101,17 @@ export default function AdminSettingsPage() {
     }
   }
 
-  if (isLoading) return <div className="p-6 text-muted-foreground">Loading...</div>
+  if (isLoading) return <div className="p-6 text-muted-foreground">{t('common.loading')}</div>
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
-      <h1 className="text-2xl font-semibold">Global Settings</h1>
+      <h1 className="text-2xl font-semibold">{t('admin.globalSettings')}</h1>
 
       {/* Registration toggle */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">User Registration</CardTitle>
-          <CardDescription>
-            Allow new users to register. When disabled, only existing users can sign in.
-          </CardDescription>
+          <CardTitle className="text-base">{t('admin.registrationToggle')}</CardTitle>
+          <CardDescription>{t('admin.registrationDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-3">
@@ -118,8 +121,8 @@ export default function AdminSettingsPage() {
               onCheckedChange={handleRegistrationToggle}
             />
             <Label htmlFor="reg-toggle">
-              Registration is currently{' '}
-              <strong>{registrationEnabled ? 'open' : 'closed'}</strong>
+              {t('admin.registrationCurrent')}{' '}
+              <strong>{registrationEnabled ? t('admin.open') : t('admin.closed')}</strong>
             </Label>
           </div>
         </CardContent>
@@ -128,8 +131,8 @@ export default function AdminSettingsPage() {
       {/* App name */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Application Name</CardTitle>
-          <CardDescription>Shown in emails and the UI</CardDescription>
+          <CardTitle className="text-base">{t('admin.appName')}</CardTitle>
+          <CardDescription>{t('admin.appNameDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSaveAppName} className="flex gap-3">
@@ -141,7 +144,7 @@ export default function AdminSettingsPage() {
               required
             />
             <Button type="submit" size="sm" loading={savingAppName}>
-              Save
+              {t('common.save')}
             </Button>
           </form>
         </CardContent>
@@ -150,16 +153,13 @@ export default function AdminSettingsPage() {
       {/* Email provider */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Email Provider</CardTitle>
-          <CardDescription>
-            Configure how the application sends email (used for OTP verification codes).
-          </CardDescription>
+          <CardTitle className="text-base">{t('admin.emailProvider')}</CardTitle>
+          <CardDescription>{t('admin.emailProviderDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSaveEmailSettings} className="space-y-4">
-            {/* Provider selector */}
             <div className="space-y-1.5">
-              <Label htmlFor="email-provider">Provider</Label>
+              <Label htmlFor="email-provider">{t('admin.provider')}</Label>
               <select
                 id="email-provider"
                 value={emailProvider}
@@ -171,7 +171,6 @@ export default function AdminSettingsPage() {
               </select>
             </div>
 
-            {/* Resend fields */}
             {emailProvider === 'resend' && (
               <div className="space-y-3 rounded-md border p-4">
                 <div className="space-y-1.5">
@@ -225,7 +224,6 @@ export default function AdminSettingsPage() {
               </div>
             )}
 
-            {/* SMTP fields */}
             {emailProvider === 'smtp' && (
               <div className="space-y-3 rounded-md border p-4">
                 <div className="grid grid-cols-[1fr_120px] gap-3">
@@ -292,7 +290,7 @@ export default function AdminSettingsPage() {
             )}
 
             <Button type="submit" size="sm" loading={savingEmail}>
-              Save
+              {t('common.save')}
             </Button>
           </form>
         </CardContent>

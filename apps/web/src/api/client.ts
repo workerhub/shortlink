@@ -263,20 +263,26 @@ export const linksApi = {
 
 // ─── Analytics API ────────────────────────────────────────────────────────────
 
+export interface AnalyticsStats {
+  totalClicks: number
+  days: number
+  timeline: Array<{ day: string; clicks: number }>
+  countries: Array<{ country: string; clicks: number }>
+  devices: Array<{ device_type: string; clicks: number }>
+  browsers: Array<{ browser: string; clicks: number }>
+  os: Array<{ os: string; clicks: number }>
+  referrers: Array<{ referer: string; clicks: number }>
+  topLinks?: Array<{ id: string; slug: string; title: string | null; clicks: number }>
+}
+
 export const analyticsApi = {
+  summary: (days = 30) =>
+    request<{ stats: AnalyticsStats }>(`/analytics/summary?days=${days}`),
+
   get: (linkId: string, days = 30) =>
     request<{
       link: { id: string; slug: string; destinationUrl: string; title: string | null; createdAt: number; expiresAt: number | null }
-      stats: {
-        totalClicks: number
-        days: number
-        timeline: Array<{ day: string; clicks: number }>
-        countries: Array<{ country: string; clicks: number }>
-        devices: Array<{ device_type: string; clicks: number }>
-        browsers: Array<{ browser: string; clicks: number }>
-        os: Array<{ os: string; clicks: number }>
-        referrers: Array<{ referer: string; clicks: number }>
-      }
+      stats: AnalyticsStats
     }>(`/analytics/${linkId}?days=${days}`),
 }
 
@@ -311,6 +317,11 @@ export const adminApi = {
       `/admin/links?${qs}`,
     )
   },
+  createUser: (payload: { email: string; username: string; password: string; role?: 'admin' | 'user' }) =>
+    request<{ user: User }>('/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   getSettings: () => request<{ settings: Record<string, string> }>('/admin/settings'),
   updateSettings: (settings: Record<string, string>) =>
     request<{ success: boolean }>('/admin/settings', {

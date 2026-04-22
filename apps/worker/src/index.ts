@@ -8,6 +8,8 @@ import adminRoutes from './routes/admin.js'
 import redirectHandler from './routes/redirect.js'
 import setupRoutes from './routes/setup.js'
 import { RESERVED_SLUGS } from './lib/slug.js'
+import { getCachedSetting, setCachedSetting } from './lib/kv.js'
+import { tbl } from './lib/db.js'
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 
@@ -17,12 +19,10 @@ app.use('/api/*', async (c, next) => {
   c.header('X-Content-Type-Options', 'nosniff')
   c.header('X-Frame-Options', 'DENY')
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin')
-  // MED-8: CSP locks down script execution and framing
   c.header(
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'",
   )
-  // S2: HSTS for HTTPS deployments (2-year max-age, include subdomains)
   if (c.env.APP_URL.startsWith('https')) {
     c.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains')
   }
@@ -33,7 +33,6 @@ app.use('/api/*', async (c, next) => {
   const handler = cors({
     origin: (origin) => {
       const allowed = [c.env.APP_URL, 'http://localhost:5173', 'http://localhost:4173']
-      // MED-1: Return null (not '') for disallowed origins — unambiguously suppresses header
       return allowed.includes(origin) ? origin : null
     },
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -42,6 +41,22 @@ app.use('/api/*', async (c, next) => {
     maxAge: 86400,
   })
   return handler(c, next)
+})
+
+// ─── Public config endpoint ───────────────────────────────────────────────────
+app.get('/api/config', async (c) => {
+  const cached = await getCachedSetting(c.env.LINKS_KV, 'app_name')
+  let appName: string
+  if (cached !== null) {
+    appName = cached
+  } else {
+    const row = await c.env.DB.prepare(
+      `SELECT value FROM ${tbl(c.env, 'settings')} WHERE key = 'app_name'`,
+    ).first<{ value: string }>()
+    appName = row?.value ?? c.env.APP_NAME ?? 'ShortLink'
+    if (row?.value) await setCachedSetting(c.env.LINKS_KV, 'app_name', row.value)
+  }
+  return c.json({ appName })
 })
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
@@ -57,13 +72,10 @@ app.route('/setup', setupRoutes)
 app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: Date.now() }))
 
 // ─── Short link redirect ───────────────────────────────────────────────────────
-// L6: Derive SPA_PREFIXES from RESERVED_SLUGS so both lists stay in sync.
 const SPA_PREFIXES = new Set([...RESERVED_SLUGS].map((s) => `/${s}`))
 
 app.get('/:slug', async (c, next) => {
   const slug = c.req.param('slug')
-  // MED-2: Exact match (not startsWith) — /:slug is single-segment, so prefix matching
-  //        would incorrectly catch slugs like "logintest" or "dashboardstats".
   if (SPA_PREFIXES.has(`/${slug}`)) {
     return next()
   }
@@ -79,10 +91,8 @@ export default {
   // L-2: Nightly cleanup of expired rows (cron: "0 3 * * *")
   async scheduled(_event: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     await env.DB.batch([
-      // Purge expired OTP verification rows
-      env.DB.prepare('DELETE FROM verifications WHERE expires_at < unixepoch()'),
-      // Purge TOTP one-time-use records older than the valid window (90s)
-      env.DB.prepare('DELETE FROM totp_used WHERE used_at < unixepoch() - 90'),
+      env.DB.prepare(`DELETE FROM ${tbl(env, 'verifications')} WHERE expires_at < unixepoch()`),
+      env.DB.prepare(`DELETE FROM ${tbl(env, 'totp_used')} WHERE used_at < unixepoch() - 90`),
     ])
   },
 } satisfies ExportedHandler<Env>

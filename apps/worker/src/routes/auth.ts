@@ -43,6 +43,7 @@ import {
 } from '../lib/webauthn.js'
 import { sendEmail, otpEmailHtml } from '../lib/email.js'
 import { requireAuth } from '../middleware/auth.js'
+import { tbl } from '../lib/db.js'
 import type { Env, Variables, UserRow, PasskeyRow } from '../types.js'
 
 const auth = new Hono<{ Bindings: Env; Variables: Variables }>()
@@ -89,7 +90,7 @@ async function issueTokens(user: UserRow, jwtSecret: string) {
 async function isRegistrationEnabled(env: Env): Promise<boolean> {
   const cached = await getCachedSetting(env.LINKS_KV, 'registration_enabled')
   if (cached !== null) return cached === 'true'
-  const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'registration_enabled'")
+  const row = await env.DB.prepare(`SELECT value FROM ${tbl(env, 'settings')} WHERE key = 'registration_enabled'`)
     .first<{ value: string }>()
   const val = row?.value ?? 'false'
   await setCachedSetting(env.LINKS_KV, 'registration_enabled', val)
@@ -100,7 +101,7 @@ async function isRegistrationEnabled(env: Env): Promise<boolean> {
 async function getAppName(env: Env): Promise<string> {
   const cached = await getCachedSetting(env.LINKS_KV, 'app_name')
   if (cached !== null) return cached
-  const row = await env.DB.prepare("SELECT value FROM settings WHERE key = 'app_name'")
+  const row = await env.DB.prepare(`SELECT value FROM ${tbl(env, 'settings')} WHERE key = 'app_name'`)
     .first<{ value: string }>()
   const val = row?.value ?? env.APP_NAME
   await setCachedSetting(env.LINKS_KV, 'app_name', val)
@@ -154,7 +155,7 @@ auth.post('/register', async (c) => {
   }
 
   // H3: Check registration status before INSERT
-  const countRow = await c.env.DB.prepare('SELECT COUNT(*) as n FROM users').first<{ n: number }>()
+  const countRow = await c.env.DB.prepare(`SELECT COUNT(*) as n FROM ${tbl(c.env, 'users')}`).first<{ n: number }>()
   const isFirstUser = (countRow?.n ?? 0) === 0
 
   if (!isFirstUser) {
@@ -166,7 +167,7 @@ auth.post('/register', async (c) => {
 
   // Check uniqueness
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM users WHERE email = ?1 OR username = ?2',
+    `SELECT id FROM ${tbl(c.env, 'users')} WHERE email = ?1 OR username = ?2`,
   )
     .bind(email, username)
     .first()
@@ -178,8 +179,8 @@ auth.post('/register', async (c) => {
 
   // H3: Role assigned atomically inside SQL — prevents bootstrap race condition
   const result = await c.env.DB.prepare(
-    `INSERT INTO users (email, username, password_hash, role)
-     VALUES (?1, ?2, ?3, CASE WHEN (SELECT COUNT(*) FROM users) = 0 THEN 'admin' ELSE 'user' END)
+    `INSERT INTO ${tbl(c.env, 'users')} (email, username, password_hash, role)
+     VALUES (?1, ?2, ?3, CASE WHEN (SELECT COUNT(*) FROM ${tbl(c.env, 'users')}) = 0 THEN 'admin' ELSE 'user' END)
      RETURNING id, email, username, role`,
   )
     .bind(email, username, passwordHash)
@@ -212,7 +213,7 @@ auth.post('/login', async (c) => {
     return c.json({ error: 'Too many login attempts. Please try again later.' }, 429)
   }
 
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?1')
+  const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE email = ?1`)
     .bind(email)
     .first<UserRow>()
 
@@ -292,7 +293,7 @@ auth.post('/refresh', async (c) => {
     const refreshTtl = Math.max(payload.exp - Math.floor(Date.now() / 1000), 0) + 60
     await denylistJti(c.env.LINKS_KV, payload.jti, refreshTtl)
 
-    const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1')
+    const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
       .bind(payload.sub)
       .first<UserRow>()
     if (!user || !user.is_active) return c.json({ error: 'User not found' }, 401)
@@ -312,7 +313,7 @@ auth.post('/refresh', async (c) => {
 auth.get('/me', requireAuth, async (c) => {
   const userId = c.get('userId')
   const user = await c.env.DB.prepare(
-    'SELECT id, email, username, role, totp_enabled, email_2fa_enabled, passkey_enabled, created_at FROM users WHERE id = ?1',
+    `SELECT id, email, username, role, totp_enabled, email_2fa_enabled, passkey_enabled, created_at FROM ${tbl(c.env, 'users')} WHERE id = ?1`,
   )
     .bind(userId)
     .first<
@@ -352,7 +353,7 @@ auth.post('/change-password', requireAuth, async (c) => {
     return c.json({ error: 'Password too long' }, 400)
   }
 
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1')
+  const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(userId)
     .first<UserRow>()
   if (!user) return c.json({ error: 'Not found' }, 404)
@@ -362,13 +363,12 @@ auth.post('/change-password', requireAuth, async (c) => {
 
   const newHash = await hashPassword(body.newPassword)
   await c.env.DB.prepare(
-    'UPDATE users SET password_hash = ?1, updated_at = unixepoch() WHERE id = ?2',
+    `UPDATE ${tbl(c.env, 'users')} SET password_hash = ?1, updated_at = unixepoch() WHERE id = ?2`,
   )
     .bind(newHash, userId)
     .run()
 
-  // C-3 + S1: Denylist both access and refresh tokens — attacker with stolen cookie
-  // cannot retain access after a password change
+  // C-3 + S1: Denylist both access and refresh tokens
   const accessTtl = Math.max(exp - Math.floor(Date.now() / 1000), 0) + 60
   await denylistJti(c.env.LINKS_KV, jti, accessTtl)
 
@@ -394,7 +394,7 @@ auth.get('/2fa/totp/setup', requireAuth, async (c) => {
   const userId = c.get('userId')
   const userEmail = c.get('userEmail')
 
-  const user = await c.env.DB.prepare('SELECT totp_enabled FROM users WHERE id = ?1')
+  const user = await c.env.DB.prepare(`SELECT totp_enabled FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(userId)
     .first<Pick<UserRow, 'totp_enabled'>>()
 
@@ -403,13 +403,12 @@ auth.get('/2fa/totp/setup', requireAuth, async (c) => {
   }
 
   const secret = generateTotpSecret()
-  // LOW-3: Read app_name from DB/KV so admin settings changes are reflected
   const appName = await getAppName(c.env)
   const uri = buildTotpUri(secret, userEmail, appName)
 
   const encrypted = await encryptTotpSecret(secret, c.env.TOTP_ENCRYPTION_KEY)
   await c.env.DB.prepare(
-    'UPDATE users SET totp_secret = ?1, totp_enabled = 0, updated_at = unixepoch() WHERE id = ?2',
+    `UPDATE ${tbl(c.env, 'users')} SET totp_secret = ?1, totp_enabled = 0, updated_at = unixepoch() WHERE id = ?2`,
   )
     .bind(encrypted, userId)
     .run()
@@ -432,7 +431,7 @@ auth.post('/2fa/totp/confirm', requireAuth, async (c) => {
   }
 
   const user = await c.env.DB.prepare(
-    'SELECT totp_secret, totp_enabled FROM users WHERE id = ?1',
+    `SELECT totp_secret, totp_enabled FROM ${tbl(c.env, 'users')} WHERE id = ?1`,
   )
     .bind(userId)
     .first<Pick<UserRow, 'totp_secret' | 'totp_enabled'>>()
@@ -445,15 +444,13 @@ auth.post('/2fa/totp/confirm', requireAuth, async (c) => {
     return c.json({ error: 'Invalid code' }, 400)
   }
 
-  // Success — reset the attempt counter so a future re-setup gets a fresh budget
   await resetTotpConfirmAttempts(c.env.LINKS_KV, userId)
 
   const backupCodes = generateBackupCodes(8)
-  // C-4: Strip hyphens before hashing to match what verify does (sha256(code.replace(/-/g, '')))
   const hashedCodes = await Promise.all(backupCodes.map((code) => sha256(code.replace(/-/g, ''))))
 
   await c.env.DB.prepare(
-    'UPDATE users SET totp_enabled = 1, totp_backup_codes = ?1, updated_at = unixepoch() WHERE id = ?2',
+    `UPDATE ${tbl(c.env, 'users')} SET totp_enabled = 1, totp_backup_codes = ?1, updated_at = unixepoch() WHERE id = ?2`,
   )
     .bind(JSON.stringify(hashedCodes), userId)
     .run()
@@ -465,13 +462,12 @@ auth.post('/2fa/totp/confirm', requireAuth, async (c) => {
 auth.delete('/2fa/totp', requireAuth, async (c) => {
   const userId = c.get('userId')
 
-  // M1: Password confirmation required to disable 2FA
   const body = await c.req
     .json<{ currentPassword?: string }>()
     .catch(() => ({}) as { currentPassword?: string })
   if (!body.currentPassword) return c.json({ error: 'currentPassword required' }, 400)
 
-  const user = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?1')
+  const user = await c.env.DB.prepare(`SELECT password_hash FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(userId)
     .first<Pick<UserRow, 'password_hash'>>()
   if (!user) return c.json({ error: 'Not found' }, 404)
@@ -480,7 +476,7 @@ auth.delete('/2fa/totp', requireAuth, async (c) => {
   }
 
   await c.env.DB.prepare(
-    'UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_backup_codes = NULL, updated_at = unixepoch() WHERE id = ?1',
+    `UPDATE ${tbl(c.env, 'users')} SET totp_secret = NULL, totp_enabled = 0, totp_backup_codes = NULL, updated_at = unixepoch() WHERE id = ?1`,
   )
     .bind(userId)
     .run()
@@ -491,7 +487,6 @@ auth.delete('/2fa/totp', requireAuth, async (c) => {
 auth.post('/2fa/totp/verify', async (c) => {
   const body = await c.req.json<{ pendingToken: string; code: string }>().catch(() => null)
   if (!body) return c.json({ error: 'Invalid JSON body' }, 400)
-  // R5-S3: Reject oversized inputs before any crypto work (max 16 covers "XXXXX-XXXXX" backup codes)
   if (!body.pendingToken || !body.code || body.code.length > 16) {
     return c.json({ error: 'pendingToken and code required' }, 400)
   }
@@ -503,31 +498,27 @@ auth.post('/2fa/totp/verify', async (c) => {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // C3: Replay prevention — reject if pending token was already consumed
   const storedUserId = await getPending2fa(c.env.LINKS_KV, pending.jti)
   if (!storedUserId) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
-  // R4-L1: Defence-in-depth — KV value must match the JWT subject
   if (storedUserId !== pending.sub) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // C2: Rate limit 2FA attempts per pending token (max 5)
   const attempts = await increment2faAttempts(c.env.LINKS_KV, pending.jti)
   if (attempts > 5) {
     await deletePending2fa(c.env.LINKS_KV, pending.jti)
     return c.json({ error: 'Too many failed attempts. Please log in again.' }, 429)
   }
 
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1')
+  const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(pending.sub)
     .first<UserRow>()
 
   if (!user || !user.totp_secret || !user.totp_enabled) {
     return c.json({ error: 'TOTP not configured' }, 400)
   }
-  // R4-H1: Account may have been disabled while pending token was in flight
   if (!user.is_active) return c.json({ error: 'Account is disabled' }, 403)
 
   const secret = await decryptTotpSecret(user.totp_secret, c.env.TOTP_ENCRYPTION_KEY)
@@ -536,10 +527,8 @@ auth.post('/2fa/totp/verify', async (c) => {
   let isBackup = false
 
   if (isTotpCode) {
-    // H-1: Atomic replay prevention via D1 INSERT OR IGNORE — no TOCTOU window.
-    // PRIMARY KEY (user_id, code) enforces uniqueness; only the first INSERT succeeds.
     const result = await c.env.DB.prepare(
-      'INSERT OR IGNORE INTO totp_used (user_id, code) VALUES (?1, ?2)',
+      `INSERT OR IGNORE INTO ${tbl(c.env, 'totp_used')} (user_id, code) VALUES (?1, ?2)`,
     )
       .bind(user.id, body.code)
       .run()
@@ -557,7 +546,6 @@ auth.post('/2fa/totp/verify', async (c) => {
       return c.json({ error: 'Invalid code' }, 401)
     }
     const oldCodesJson = user.totp_backup_codes
-    // Constant-time comparison using XOR — hides both position and existence of match
     const hashedBuf = new TextEncoder().encode(hashed)
     let idx = -1
     for (let i = 0; i < codes.length; i++) {
@@ -570,9 +558,8 @@ auth.post('/2fa/totp/verify', async (c) => {
     }
     if (idx !== -1) {
       codes.splice(idx, 1)
-      // H2: Atomic backup code consumption — optimistic lock on current JSON value
       const result = await c.env.DB.prepare(
-        'UPDATE users SET totp_backup_codes = ?1, updated_at = unixepoch() WHERE id = ?2 AND totp_backup_codes = ?3',
+        `UPDATE ${tbl(c.env, 'users')} SET totp_backup_codes = ?1, updated_at = unixepoch() WHERE id = ?2 AND totp_backup_codes = ?3`,
       )
         .bind(JSON.stringify(codes), user.id, oldCodesJson)
         .run()
@@ -588,7 +575,6 @@ auth.post('/2fa/totp/verify', async (c) => {
 
   await deletePending2fa(c.env.LINKS_KV, pending.jti)
   const tokens = await issueTokens(user, c.env.JWT_SECRET)
-  // H4: Refresh token as HttpOnly cookie
   setRefreshCookie(c, tokens.refreshToken)
   return c.json({
     accessToken: tokens.accessToken,
@@ -604,7 +590,7 @@ auth.post('/2fa/totp/verify', async (c) => {
 auth.post('/2fa/email-otp/enable', requireAuth, async (c) => {
   const userId = c.get('userId')
   await c.env.DB.prepare(
-    'UPDATE users SET email_2fa_enabled = 1, updated_at = unixepoch() WHERE id = ?1',
+    `UPDATE ${tbl(c.env, 'users')} SET email_2fa_enabled = 1, updated_at = unixepoch() WHERE id = ?1`,
   )
     .bind(userId)
     .run()
@@ -615,13 +601,12 @@ auth.post('/2fa/email-otp/enable', requireAuth, async (c) => {
 auth.delete('/2fa/email-otp', requireAuth, async (c) => {
   const userId = c.get('userId')
 
-  // M1: Password confirmation required to disable 2FA
   const body = await c.req
     .json<{ currentPassword?: string }>()
     .catch(() => ({}) as { currentPassword?: string })
   if (!body.currentPassword) return c.json({ error: 'currentPassword required' }, 400)
 
-  const user = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?1')
+  const user = await c.env.DB.prepare(`SELECT password_hash FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(userId)
     .first<Pick<UserRow, 'password_hash'>>()
   if (!user) return c.json({ error: 'Not found' }, 404)
@@ -630,7 +615,7 @@ auth.delete('/2fa/email-otp', requireAuth, async (c) => {
   }
 
   await c.env.DB.prepare(
-    'UPDATE users SET email_2fa_enabled = 0, updated_at = unixepoch() WHERE id = ?1',
+    `UPDATE ${tbl(c.env, 'users')} SET email_2fa_enabled = 0, updated_at = unixepoch() WHERE id = ?1`,
   )
     .bind(userId)
     .run()
@@ -650,24 +635,19 @@ auth.post('/2fa/email-otp/send', async (c) => {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // MED-5: Verify the pending session is still active in KV (prevents inbox flooding
-  // after a pending token has been consumed by a successful 2FA completion)
   const storedUserId = await getPending2fa(c.env.LINKS_KV, pending.jti)
   if (!storedUserId) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
-  // R4-L1: KV value must match the JWT subject
   if (storedUserId !== pending.sub) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1')
+  const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(pending.sub)
     .first<UserRow>()
   if (!user) return c.json({ error: 'User not found' }, 404)
-  // R4-H1: Account may have been disabled while pending token was in flight
   if (!user.is_active) return c.json({ error: 'Account is disabled' }, 403)
-  // R5-H1: Enforce the 2FA method — user must have email OTP enabled
   if (!user.email_2fa_enabled) return c.json({ error: 'Email OTP is not enabled for this account' }, 400)
 
   const allowed = await checkOtpRateLimit(c.env.LINKS_KV, user.email)
@@ -679,12 +659,8 @@ auth.post('/2fa/email-otp/send', async (c) => {
   const codeHash = await sha256(code)
   const expiresAt = Math.floor(Date.now() / 1000) + 600
 
-  // LOW-3: Read app_name from DB/KV
   const appName = await getAppName(c.env)
 
-  // Send email BEFORE writing to DB — if send fails the user gets a clean error
-  // and no DB state is modified. If send succeeds but DB write fails the user
-  // got a code they can't use, but they can simply request again.
   try {
     await sendEmail(c.env, {
       to: user.email,
@@ -696,13 +672,13 @@ auth.post('/2fa/email-otp/send', async (c) => {
   }
 
   await c.env.DB.prepare(
-    "DELETE FROM verifications WHERE identifier = ?1 AND type = 'email_otp' AND used = 0",
+    `DELETE FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'email_otp' AND used = 0`,
   )
     .bind(user.email)
     .run()
 
   await c.env.DB.prepare(
-    'INSERT INTO verifications (identifier, type, code_hash, expires_at) VALUES (?1, ?2, ?3, ?4)',
+    `INSERT INTO ${tbl(c.env, 'verifications')} (identifier, type, code_hash, expires_at) VALUES (?1, ?2, ?3, ?4)`,
   )
     .bind(user.email, 'email_otp', codeHash, expiresAt)
     .run()
@@ -714,7 +690,6 @@ auth.post('/2fa/email-otp/send', async (c) => {
 auth.post('/2fa/email-otp/verify', async (c) => {
   const body = await c.req.json<{ pendingToken: string; code: string }>().catch(() => null)
   if (!body) return c.json({ error: 'Invalid JSON body' }, 400)
-  // R5-S3 / R6-S3: Email OTP is always 6 digits — tighter limit than TOTP path (no backup codes here)
   if (!body.pendingToken || !body.code || body.code.length > 6) {
     return c.json({ error: 'pendingToken and code required' }, 400)
   }
@@ -726,35 +701,30 @@ auth.post('/2fa/email-otp/verify', async (c) => {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // C3: Replay prevention — reject if pending token was already consumed
   const storedUserId = await getPending2fa(c.env.LINKS_KV, pending.jti)
   if (!storedUserId) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
-  // R4-L1: KV value must match the JWT subject
   if (storedUserId !== pending.sub) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // MED-4: Apply global attempt cap per pending token (mirrors TOTP path)
   const attempts = await increment2faAttempts(c.env.LINKS_KV, pending.jti)
   if (attempts > 5) {
     await deletePending2fa(c.env.LINKS_KV, pending.jti)
     return c.json({ error: 'Too many failed attempts. Please log in again.' }, 429)
   }
 
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1')
+  const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(pending.sub)
     .first<UserRow>()
   if (!user) return c.json({ error: 'User not found' }, 404)
-  // R4-H1: Account may have been disabled while pending token was in flight
   if (!user.is_active) return c.json({ error: 'Account is disabled' }, 403)
-  // R5-H1: Enforce the 2FA method — user must have email OTP enabled
   if (!user.email_2fa_enabled) return c.json({ error: 'Email OTP is not enabled for this account' }, 400)
 
   const now = Math.floor(Date.now() / 1000)
   const verification = await c.env.DB.prepare(
-    "SELECT * FROM verifications WHERE identifier = ?1 AND type = 'email_otp' AND used = 0 AND expires_at > ?2 ORDER BY created_at DESC LIMIT 1",
+    `SELECT * FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'email_otp' AND used = 0 AND expires_at > ?2 ORDER BY created_at DESC LIMIT 1`,
   )
     .bind(user.email, now)
     .first<{ id: string; code_hash: string; attempts: number }>()
@@ -769,19 +739,18 @@ auth.post('/2fa/email-otp/verify', async (c) => {
 
   const inputHash = await sha256(body.code)
   if (inputHash !== verification.code_hash) {
-    await c.env.DB.prepare('UPDATE verifications SET attempts = attempts + 1 WHERE id = ?1')
+    await c.env.DB.prepare(`UPDATE ${tbl(c.env, 'verifications')} SET attempts = attempts + 1 WHERE id = ?1`)
       .bind(verification.id)
       .run()
     return c.json({ error: 'Invalid code' }, 401)
   }
 
-  await c.env.DB.prepare('UPDATE verifications SET used = 1 WHERE id = ?1')
+  await c.env.DB.prepare(`UPDATE ${tbl(c.env, 'verifications')} SET used = 1 WHERE id = ?1`)
     .bind(verification.id)
     .run()
   await deletePending2fa(c.env.LINKS_KV, pending.jti)
 
   const tokens = await issueTokens(user, c.env.JWT_SECRET)
-  // H4: Refresh token as HttpOnly cookie
   setRefreshCookie(c, tokens.refreshToken)
   return c.json({
     accessToken: tokens.accessToken,
@@ -797,7 +766,7 @@ auth.post('/2fa/email-otp/verify', async (c) => {
 auth.get('/2fa/passkey', requireAuth, async (c) => {
   const userId = c.get('userId')
   const passkeys = await c.env.DB.prepare(
-    'SELECT id, name, created_at, last_used_at FROM passkeys WHERE user_id = ?1',
+    `SELECT id, name, created_at, last_used_at FROM ${tbl(c.env, 'passkeys')} WHERE user_id = ?1`,
   )
     .bind(userId)
     .all<Pick<PasskeyRow, 'id' | 'name' | 'created_at' | 'last_used_at'>>()
@@ -810,12 +779,11 @@ auth.post('/2fa/passkey/register-options', requireAuth, async (c) => {
   const userEmail = c.get('userEmail')
 
   const existingPasskeys = await c.env.DB.prepare(
-    'SELECT id, transports FROM passkeys WHERE user_id = ?1',
+    `SELECT id, transports FROM ${tbl(c.env, 'passkeys')} WHERE user_id = ?1`,
   )
     .bind(userId)
     .all<Pick<PasskeyRow, 'id' | 'transports'>>()
 
-  // R6-L4: Cap passkeys per user to prevent unbounded D1 storage growth
   if (existingPasskeys.results.length >= 10) {
     return c.json({ error: 'Maximum of 10 passkeys allowed per account' }, 400)
   }
@@ -857,7 +825,6 @@ auth.post('/2fa/passkey/register-verify', requireAuth, async (c) => {
     return c.json({ error: 'Invalid or expired challenge' }, 400)
   }
 
-  // R4-M2: Limit passkey name length to prevent storage abuse
   if (body.name && body.name.length > 64) {
     return c.json({ error: 'Passkey name must be 64 characters or fewer' }, 400)
   }
@@ -871,7 +838,6 @@ auth.post('/2fa/passkey/register-verify', requireAuth, async (c) => {
       c.env.APP_ORIGIN,
     )
   } catch {
-    // H5: Do not expose internal error details
     return c.json({ error: 'Passkey verification failed' }, 400)
   }
 
@@ -882,13 +848,12 @@ auth.post('/2fa/passkey/register-verify', requireAuth, async (c) => {
   const { credentialID, credentialPublicKey, counter } = verification.registrationInfo
   const publicKeyB64 = uint8ArrayToBase64Url(credentialPublicKey)
   const responseBody = body.response as { response?: { transports?: unknown[] } }
-  // R6-S2: Sanitise transports — only keep short string values, max 8 entries
   const transports = (responseBody.response?.transports ?? [])
     .filter((t): t is string => typeof t === 'string' && t.length <= 32)
     .slice(0, 8)
 
   await c.env.DB.prepare(
-    'INSERT INTO passkeys (id, user_id, public_key, counter, name, aaguid, transports) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)',
+    `INSERT INTO ${tbl(c.env, 'passkeys')} (id, user_id, public_key, counter, name, aaguid, transports) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
   )
     .bind(
       credentialID,
@@ -902,7 +867,7 @@ auth.post('/2fa/passkey/register-verify', requireAuth, async (c) => {
     .run()
 
   await c.env.DB.prepare(
-    'UPDATE users SET passkey_enabled = 1, updated_at = unixepoch() WHERE id = ?1',
+    `UPDATE ${tbl(c.env, 'users')} SET passkey_enabled = 1, updated_at = unixepoch() WHERE id = ?1`,
   )
     .bind(userId)
     .run()
@@ -915,13 +880,12 @@ auth.delete('/2fa/passkey/:id', requireAuth, async (c) => {
   const userId = c.get('userId')
   const credId = c.req.param('id')
 
-  // M1: Password confirmation required to remove a passkey
   const body = await c.req
     .json<{ currentPassword?: string }>()
     .catch(() => ({}) as { currentPassword?: string })
   if (!body.currentPassword) return c.json({ error: 'currentPassword required' }, 400)
 
-  const userCheck = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?1')
+  const userCheck = await c.env.DB.prepare(`SELECT password_hash FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(userId)
     .first<Pick<UserRow, 'password_hash'>>()
   if (!userCheck) return c.json({ error: 'Not found' }, 404)
@@ -929,19 +893,19 @@ auth.delete('/2fa/passkey/:id', requireAuth, async (c) => {
     return c.json({ error: 'Current password is incorrect' }, 401)
   }
 
-  await c.env.DB.prepare('DELETE FROM passkeys WHERE id = ?1 AND user_id = ?2')
+  await c.env.DB.prepare(`DELETE FROM ${tbl(c.env, 'passkeys')} WHERE id = ?1 AND user_id = ?2`)
     .bind(credId, userId)
     .run()
 
   const remaining = await c.env.DB.prepare(
-    'SELECT COUNT(*) as n FROM passkeys WHERE user_id = ?1',
+    `SELECT COUNT(*) as n FROM ${tbl(c.env, 'passkeys')} WHERE user_id = ?1`,
   )
     .bind(userId)
     .first<{ n: number }>()
 
   if (!remaining?.n) {
     await c.env.DB.prepare(
-      'UPDATE users SET passkey_enabled = 0, updated_at = unixepoch() WHERE id = ?1',
+      `UPDATE ${tbl(c.env, 'users')} SET passkey_enabled = 0, updated_at = unixepoch() WHERE id = ?1`,
     )
       .bind(userId)
       .run()
@@ -963,32 +927,27 @@ auth.post('/2fa/passkey/verify-options', async (c) => {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // MED-5: Verify the pending session is still active in KV
   const storedUserId = await getPending2fa(c.env.LINKS_KV, pending.jti)
   if (!storedUserId) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
-  // R5-L1: KV value must match the JWT subject (mirrors all other 2FA handlers)
   if (storedUserId !== pending.sub) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // R4-L3: Use a dedicated counter for options calls (cap 10) so challenge-fetches
-  //         don't consume the verify budget (which has a lower cap of 5).
   const optionsAttempts = await incrementPasskeyOptsAttempts(c.env.LINKS_KV, pending.jti)
   if (optionsAttempts > 10) {
     await deletePending2fa(c.env.LINKS_KV, pending.jti)
     return c.json({ error: 'Too many requests. Please log in again.' }, 429)
   }
 
-  // R4-H1: Check is_active — account may have been disabled while pending token was in flight
-  const userActive = await c.env.DB.prepare('SELECT is_active FROM users WHERE id = ?1')
+  const userActive = await c.env.DB.prepare(`SELECT is_active FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(pending.sub)
     .first<Pick<UserRow, 'is_active'>>()
   if (!userActive || !userActive.is_active) return c.json({ error: 'Account is disabled' }, 403)
 
   const passkeys = await c.env.DB.prepare(
-    'SELECT id, transports FROM passkeys WHERE user_id = ?1',
+    `SELECT id, transports FROM ${tbl(c.env, 'passkeys')} WHERE user_id = ?1`,
   )
     .bind(pending.sub)
     .all<Pick<PasskeyRow, 'id' | 'transports'>>()
@@ -1029,17 +988,14 @@ auth.post('/2fa/passkey/verify', async (c) => {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // C3: Replay prevention — reject if pending token was already consumed
   const storedUserId = await getPending2fa(c.env.LINKS_KV, pending.jti)
   if (!storedUserId) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
-  // R5-L1: KV value must match the JWT subject (mirrors all other 2FA handlers)
   if (storedUserId !== pending.sub) {
     return c.json({ error: 'Invalid or expired pending token' }, 401)
   }
 
-  // MED-4: Apply global attempt cap per pending token (mirrors TOTP path)
   const passkeyAttempts = await increment2faAttempts(c.env.LINKS_KV, pending.jti)
   if (passkeyAttempts > 5) {
     await deletePending2fa(c.env.LINKS_KV, pending.jti)
@@ -1051,7 +1007,7 @@ auth.post('/2fa/passkey/verify', async (c) => {
     return c.json({ error: 'Invalid or expired challenge' }, 400)
   }
 
-  const passkey = await c.env.DB.prepare('SELECT * FROM passkeys WHERE id = ?1 AND user_id = ?2')
+  const passkey = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'passkeys')} WHERE id = ?1 AND user_id = ?2`)
     .bind((body.response as { id: string }).id, pending.sub)
     .first<PasskeyRow>()
 
@@ -1067,22 +1023,19 @@ auth.post('/2fa/passkey/verify', async (c) => {
       passkey,
     )
   } catch {
-    // H5: Do not expose internal error details
     return c.json({ error: 'Passkey verification failed' }, 400)
   }
 
   if (!verification.verified) return c.json({ error: 'Passkey verification failed' }, 401)
 
-  // R5-L2: Fetch user and check is_active BEFORE mutating state (counter + pending token).
-  // All other 2FA handlers check is_active prior to any state changes.
-  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?1')
+  const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
     .bind(pending.sub)
     .first<UserRow>()
   if (!user) return c.json({ error: 'User not found' }, 404)
   if (!user.is_active) return c.json({ error: 'Account is disabled' }, 403)
 
   await c.env.DB.prepare(
-    'UPDATE passkeys SET counter = ?1, last_used_at = unixepoch() WHERE id = ?2',
+    `UPDATE ${tbl(c.env, 'passkeys')} SET counter = ?1, last_used_at = unixepoch() WHERE id = ?2`,
   )
     .bind(verification.authenticationInfo.newCounter, passkey.id)
     .run()
@@ -1090,7 +1043,6 @@ auth.post('/2fa/passkey/verify', async (c) => {
   await deletePending2fa(c.env.LINKS_KV, pending.jti)
 
   const tokens = await issueTokens(user, c.env.JWT_SECRET)
-  // H4: Refresh token as HttpOnly cookie
   setRefreshCookie(c, tokens.refreshToken)
   return c.json({
     accessToken: tokens.accessToken,
