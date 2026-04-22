@@ -589,11 +589,79 @@ auth.post('/2fa/totp/verify', async (c) => {
 // POST /api/auth/2fa/email-otp/enable
 auth.post('/2fa/email-otp/enable', requireAuth, async (c) => {
   const userId = c.get('userId')
-  await c.env.DB.prepare(
-    `UPDATE ${tbl(c.env, 'users')} SET email_2fa_enabled = 1, updated_at = unixepoch() WHERE id = ?1`,
+  const userEmail = c.get('userEmail')
+
+  const body = await c.req.json<{ code: string }>().catch(() => null)
+  if (!body?.code || body.code.length > 6) return c.json({ error: 'code required' }, 400)
+
+  const now = Math.floor(Date.now() / 1000)
+  const verification = await c.env.DB.prepare(
+    `SELECT id, code_hash, attempts FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'email_verify' AND used = 0 AND expires_at > ?2 ORDER BY created_at DESC LIMIT 1`,
   )
-    .bind(userId)
+    .bind(userEmail, now)
+    .first<{ id: string; code_hash: string; attempts: number }>()
+
+  if (!verification) return c.json({ error: 'No valid verification code. Please request a new one.' }, 400)
+
+  if (verification.attempts >= 3) {
+    return c.json({ error: 'Too many failed attempts. Please request a new code.' }, 429)
+  }
+
+  const inputHash = await sha256(body.code)
+  if (inputHash !== verification.code_hash) {
+    await c.env.DB.prepare(
+      `UPDATE ${tbl(c.env, 'verifications')} SET attempts = attempts + 1 WHERE id = ?1`,
+    )
+      .bind(verification.id)
+      .run()
+    return c.json({ error: 'Invalid code' }, 400)
+  }
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE ${tbl(c.env, 'verifications')} SET used = 1 WHERE id = ?1`).bind(verification.id),
+    c.env.DB.prepare(
+      `UPDATE ${tbl(c.env, 'users')} SET email_2fa_enabled = 1, updated_at = unixepoch() WHERE id = ?1`,
+    ).bind(userId),
+  ])
+  return c.json({ success: true })
+})
+
+// POST /api/auth/2fa/email-otp/send-verify  (send code to verify email before enabling)
+auth.post('/2fa/email-otp/send-verify', requireAuth, async (c) => {
+  const userEmail = c.get('userEmail')
+
+  const allowed = await checkOtpRateLimit(c.env.LINKS_KV, userEmail)
+  if (!allowed) {
+    return c.json({ error: 'Too many requests. Try again later.' }, 429)
+  }
+
+  const code = generateOtp(6)
+  const codeHash = await sha256(code)
+  const expiresAt = Math.floor(Date.now() / 1000) + 600
+  const appName = await getAppName(c.env)
+
+  try {
+    await sendEmail(c.env, {
+      to: userEmail,
+      subject: `${appName} — Verification Code`,
+      html: otpEmailHtml(appName, code),
+    })
+  } catch {
+    return c.json({ error: 'Failed to send verification email. Please try again.' }, 500)
+  }
+
+  await c.env.DB.prepare(
+    `DELETE FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'email_verify' AND used = 0`,
+  )
+    .bind(userEmail)
     .run()
+
+  await c.env.DB.prepare(
+    `INSERT INTO ${tbl(c.env, 'verifications')} (identifier, type, code_hash, expires_at) VALUES (?1, ?2, ?3, ?4)`,
+  )
+    .bind(userEmail, 'email_verify', codeHash, expiresAt)
+    .run()
+
   return c.json({ success: true })
 })
 

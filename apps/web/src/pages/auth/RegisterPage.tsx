@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '@/api/client'
+import { useAppConfig } from '@/contexts/AppConfigContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,10 +12,15 @@ import { useTranslation } from '@/i18n'
 export default function RegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { registrationEnabled } = useAppConfig()
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!registrationEnabled) navigate('/login', { replace: true })
+  }, [registrationEnabled, navigate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

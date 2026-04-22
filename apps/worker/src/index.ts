@@ -45,10 +45,14 @@ app.use('/api/*', async (c, next) => {
 
 // ─── Public config endpoint ───────────────────────────────────────────────────
 app.get('/api/config', async (c) => {
-  const cached = await getCachedSetting(c.env.LINKS_KV, 'app_name')
+  const [appNameCached, regCached] = await Promise.all([
+    getCachedSetting(c.env.LINKS_KV, 'app_name'),
+    getCachedSetting(c.env.LINKS_KV, 'registration_enabled'),
+  ])
+
   let appName: string
-  if (cached !== null) {
-    appName = cached
+  if (appNameCached !== null) {
+    appName = appNameCached
   } else {
     const row = await c.env.DB.prepare(
       `SELECT value FROM ${tbl(c.env, 'settings')} WHERE key = 'app_name'`,
@@ -56,7 +60,20 @@ app.get('/api/config', async (c) => {
     appName = row?.value ?? c.env.APP_NAME ?? 'ShortLink'
     if (row?.value) await setCachedSetting(c.env.LINKS_KV, 'app_name', row.value)
   }
-  return c.json({ appName })
+
+  let registrationEnabled: boolean
+  if (regCached !== null) {
+    registrationEnabled = regCached === 'true'
+  } else {
+    const row = await c.env.DB.prepare(
+      `SELECT value FROM ${tbl(c.env, 'settings')} WHERE key = 'registration_enabled'`,
+    ).first<{ value: string }>()
+    const val = row?.value ?? 'false'
+    await setCachedSetting(c.env.LINKS_KV, 'registration_enabled', val)
+    registrationEnabled = val === 'true'
+  }
+
+  return c.json({ appName, registrationEnabled })
 })
 
 // ─── API Routes ───────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import { useAppConfig } from '@/contexts/AppConfigContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +11,7 @@ import { useTranslation } from '@/i18n'
 
 export default function LoginPage() {
   const { login, setPendingState } = useAuth()
+  const { registrationEnabled } = useAppConfig()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -75,12 +77,14 @@ export default function LoginPage() {
               {t('auth.signIn')}
             </Button>
           </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            {t('auth.noAccount')}{' '}
-            <Link to="/register" className="text-primary hover:underline">
-              {t('auth.register')}
-            </Link>
-          </p>
+          {registrationEnabled && (
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              {t('auth.noAccount')}{' '}
+              <Link to="/register" className="text-primary hover:underline">
+                {t('auth.register')}
+              </Link>
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

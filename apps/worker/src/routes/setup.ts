@@ -81,7 +81,7 @@ CREATE INDEX IF NOT EXISTS idx_click_logs_link_time  ON ${t('click_logs')}(link_
 CREATE TABLE IF NOT EXISTS ${t('verifications')} (
   id          TEXT    PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
   identifier  TEXT    NOT NULL,
-  type        TEXT    NOT NULL CHECK (type IN ('email_otp', 'password_reset')),
+  type        TEXT    NOT NULL CHECK (type IN ('email_otp', 'password_reset', 'email_verify')),
   code_hash   TEXT    NOT NULL,
   expires_at  INTEGER NOT NULL,
   attempts    INTEGER NOT NULL DEFAULT 0,

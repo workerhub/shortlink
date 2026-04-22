@@ -181,8 +181,13 @@ export const authApi = {
     }),
 
   // Email OTP
-  emailOtpEnable: () =>
-    request<{ success: boolean }>('/auth/2fa/email-otp/enable', { method: 'POST' }),
+  emailOtpSendVerify: () =>
+    request<{ success: boolean }>('/auth/2fa/email-otp/send-verify', { method: 'POST' }),
+  emailOtpEnable: (code: string) =>
+    request<{ success: boolean }>('/auth/2fa/email-otp/enable', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
   emailOtpDisable: (currentPassword: string) =>
     request<{ success: boolean }>('/auth/2fa/email-otp', {
       method: 'DELETE',

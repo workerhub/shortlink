@@ -457,21 +457,55 @@ function PasskeyCard({ onUpdate }: { onUpdate: () => Promise<void> }) {
 function EmailOtpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']; onUpdate: () => Promise<void> }) {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
+  const [showEnableDialog, setShowEnableDialog] = useState(false)
+  const [codeSent, setCodeSent] = useState(false)
+  const [verifyCode, setVerifyCode] = useState('')
+  const [countdown, setCountdown] = useState(0)
   const [disablePassword, setDisablePassword] = useState('')
   const [showDisableDialog, setShowDisableDialog] = useState(false)
   const enabled = !!user?.email_2fa_enabled
 
-  const enable = async () => {
+  useEffect(() => {
+    if (countdown <= 0) return
+    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [countdown])
+
+  const sendVerifyCode = async () => {
     setLoading(true)
     try {
-      await authApi.emailOtpEnable()
+      await authApi.emailOtpSendVerify()
+      setCodeSent(true)
+      setCountdown(600)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send code')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const enable = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await authApi.emailOtpEnable(verifyCode)
       toast.success('Email OTP enabled')
+      setShowEnableDialog(false)
+      setCodeSent(false)
+      setVerifyCode('')
       onUpdate()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed')
     } finally {
       setLoading(false)
     }
+  }
+
+  const closeEnableDialog = () => {
+    setShowEnableDialog(false)
+    setCodeSent(false)
+    setVerifyCode('')
+    setCountdown(0)
   }
 
   const disable = async () => {
@@ -507,13 +541,56 @@ function EmailOtpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['us
         <Button
           size="sm"
           variant={enabled ? 'destructive' : 'default'}
-          onClick={enabled ? () => setShowDisableDialog(true) : enable}
+          onClick={enabled ? () => setShowDisableDialog(true) : () => setShowEnableDialog(true)}
           loading={loading}
         >
           {enabled ? t('settings.disableEmailOtp') : t('settings.enableEmailOtp')}
         </Button>
       </CardContent>
 
+      {/* Enable: send verify code → enter code */}
+      <Dialog open={showEnableDialog} onOpenChange={(o) => { if (!o) closeEnableDialog() }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('settings.verifyEmailTitle')}</DialogTitle>
+            <DialogDescription>{t('settings.verifyEmailDesc')}</DialogDescription>
+          </DialogHeader>
+          {!codeSent ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">{t('settings.emailOtpVerifyNote')}</p>
+              <DialogFooter>
+                <Button variant="ghost" onClick={closeEnableDialog}>{t('common.cancel')}</Button>
+                <Button onClick={sendVerifyCode} loading={loading}>{t('auth.sendCode')}</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <form onSubmit={enable} className="space-y-4">
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder={t('auth.sixDigitFromEmail')}
+                value={verifyCode}
+                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+                maxLength={6}
+                autoFocus
+                autoComplete="one-time-code"
+              />
+              <p className="text-xs text-muted-foreground">
+                {countdown > 0
+                  ? t('auth.resendCodeIn', { seconds: String(countdown) })
+                  : <button type="button" className="text-primary hover:underline" onClick={sendVerifyCode} disabled={loading}>{t('auth.resendCode')}</button>
+                }
+              </p>
+              <DialogFooter>
+                <Button type="button" variant="ghost" onClick={closeEnableDialog}>{t('common.cancel')}</Button>
+                <Button type="submit" loading={loading} disabled={verifyCode.length < 6}>{t('settings.confirm')}</Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Disable: confirm password */}
       <Dialog open={showDisableDialog} onOpenChange={(o) => { if (!o) { setShowDisableDialog(false); setDisablePassword('') } }}>
         <DialogContent>
           <DialogHeader>
