@@ -79,13 +79,13 @@ export async function checkOtpRateLimit(kv: KVNamespace, email: string): Promise
   const now = Math.floor(Date.now() / 1000)
 
   if (!current) {
-    await kv.put(key, JSON.stringify({ count: 1, windowEnd: now + 3600 }), { expirationTtl: 3600 })
+    await kv.put(key, JSON.stringify({ count: 1, windowEnd: now + 600 }), { expirationTtl: 600 })
     return true
   }
 
   let entry: { count: number; windowEnd: number }
   try { entry = JSON.parse(current) } catch {
-    await kv.put(key, JSON.stringify({ count: 1, windowEnd: now + 3600 }), { expirationTtl: 3600 })
+    await kv.put(key, JSON.stringify({ count: 1, windowEnd: now + 600 }), { expirationTtl: 600 })
     return true
   }
 
