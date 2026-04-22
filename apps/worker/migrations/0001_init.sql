@@ -1,4 +1,3 @@
--- Merged schema: all tables from migrations 0001–0006
 -- This is the canonical schema for a fresh deployment.
 
 CREATE TABLE users (

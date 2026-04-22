@@ -17,6 +17,7 @@ export default function AdminLayout() {
     <div className="flex h-screen bg-background">
       <aside className="w-60 border-r flex flex-col">
         <div className="p-4 border-b flex items-center gap-2">
+          <img src="/logo.svg" alt="" className="h-6 w-6 shrink-0" />
           <span className="font-bold text-lg">{t('admin.adminPanel')}</span>
         </div>
         <nav className="flex-1 p-3 space-y-1">

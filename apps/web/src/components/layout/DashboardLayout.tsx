@@ -39,10 +39,11 @@ export default function DashboardLayout() {
       <div className="p-4 border-b">
         <Link
           to="/dashboard"
-          className="font-bold text-lg hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           onClick={() => setMobileOpen(false)}
         >
-          {appName}
+          <img src="/logo.svg" alt="" className="h-6 w-6 shrink-0" />
+          <span className="font-bold text-lg">{appName}</span>
         </Link>
       </div>
       <nav className="flex-1 p-3 space-y-1">
@@ -102,7 +103,8 @@ export default function DashboardLayout() {
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <Link to="/dashboard" className="font-bold text-lg">
+          <Link to="/dashboard" className="flex items-center gap-2 font-bold text-lg">
+            <img src="/logo.svg" alt="" className="h-6 w-6 shrink-0" />
             {appName}
           </Link>
         </div>
