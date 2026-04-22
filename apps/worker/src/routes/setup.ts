@@ -124,6 +124,38 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
 CREATE INDEX idx_audit_logs_target_id  ON audit_logs(target_id);
 `,
   },
+  {
+    name: '0004_smtp_settings',
+    sql: `
+INSERT OR IGNORE INTO settings (key, value) VALUES
+  ('email_provider', 'resend'),
+  ('smtp_host',      ''),
+  ('smtp_port',      '587'),
+  ('smtp_user',      ''),
+  ('smtp_pass',      ''),
+  ('smtp_from',      '');
+`,
+  },
+  {
+    name: '0005_email_settings',
+    sql: `
+INSERT OR IGNORE INTO settings (key, value) VALUES
+  ('resend_api_key',    ''),
+  ('email_from_domain', ''),
+  ('email_from_name',   '');
+`,
+  },
+  {
+    name: '0006_link_seq',
+    sql: `
+ALTER TABLE links ADD COLUMN user_seq INTEGER NOT NULL DEFAULT 0;
+UPDATE links SET user_seq = (
+  SELECT COUNT(*)
+  FROM links l2
+  WHERE l2.user_id = links.user_id AND l2.rowid <= links.rowid
+);
+`,
+  },
 ]
 
 // D1's exec() only processes the first line of a multi-line string.
