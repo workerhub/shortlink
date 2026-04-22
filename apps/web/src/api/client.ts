@@ -148,6 +148,12 @@ export const authApi = {
       body: JSON.stringify({ email }),
       skipAuth: true,
     }),
+  verifyResetCode: (email: string, code: string) =>
+    request<{ success: boolean }>('/auth/verify-reset-code', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+      skipAuth: true,
+    }),
   resetPassword: (email: string, code: string, newPassword: string) =>
     request<{ success: boolean }>('/auth/reset-password', {
       method: 'POST',

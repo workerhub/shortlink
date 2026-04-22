@@ -1054,6 +1054,47 @@ auth.post('/2fa/passkey/verify', async (c) => {
 // Forgot / Reset Password
 // ═════════════════════════════════════════════════════════════════════════════
 
+// POST /api/auth/verify-reset-code  (verify code only, does not consume it)
+auth.post('/verify-reset-code', async (c) => {
+  const body = await c.req.json<{ email: string; code: string }>().catch(() => null)
+  if (!body?.email || !body?.code || body.code.length > 6) {
+    return c.json({ error: 'email and code are required' }, 400)
+  }
+
+  const email = body.email.trim().toLowerCase()
+  const user = await c.env.DB.prepare(
+    `SELECT id FROM ${tbl(c.env, 'users')} WHERE email = ?1 AND is_active = 1`,
+  )
+    .bind(email)
+    .first<{ id: string }>()
+  if (!user) return c.json({ error: 'Invalid or expired code' }, 400)
+
+  const now = Math.floor(Date.now() / 1000)
+  const verification = await c.env.DB.prepare(
+    `SELECT id, code_hash, attempts FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'password_reset' AND used = 0 AND expires_at > ?2 ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(email, now)
+    .first<{ id: string; code_hash: string; attempts: number }>()
+
+  if (!verification) return c.json({ error: 'Invalid or expired code' }, 400)
+
+  if (verification.attempts >= 3) {
+    return c.json({ error: 'Too many failed attempts. Please request a new code.' }, 429)
+  }
+
+  const inputHash = await sha256(body.code)
+  if (inputHash !== verification.code_hash) {
+    await c.env.DB.prepare(
+      `UPDATE ${tbl(c.env, 'verifications')} SET attempts = attempts + 1 WHERE id = ?1`,
+    )
+      .bind(verification.id)
+      .run()
+    return c.json({ error: 'Invalid code' }, 400)
+  }
+
+  return c.json({ success: true })
+})
+
 // POST /api/auth/forgot-password
 auth.post('/forgot-password', async (c) => {
   const body = await c.req.json<{ email: string }>().catch(() => null)

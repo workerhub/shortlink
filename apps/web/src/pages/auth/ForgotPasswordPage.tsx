@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -8,30 +8,70 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n'
 
+type Step = 'email' | 'code' | 'password'
+
 export default function ForgotPasswordPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [step, setStep] = useState<'request' | 'reset'>('request')
+  const [step, setStep] = useState<Step>('email')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [countdown, setCountdown] = useState(0)
 
-  const handleRequest = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (countdown <= 0) return
+    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [countdown])
+
+  // Step 1: submit email — always advance, never surface errors (no user enumeration)
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
       await authApi.forgotPassword(email)
-      setStep('reset')
+    } catch {
+      // Silently ignore — the user should never know whether the email exists
+    } finally {
+      setLoading(false)
+    }
+    setCountdown(600)
+    setStep('code')
+  }
+
+  // Step 2: verify code — if correct, advance to password step
+  const handleCodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await authApi.verifyResetCode(email, code)
+      setStep('password')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send code')
+      toast.error(err instanceof Error ? err.message : 'Invalid code')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleReset = async (e: React.FormEvent) => {
+  // Resend code (resets countdown)
+  const handleResend = async () => {
+    setLoading(true)
+    try {
+      await authApi.forgotPassword(email)
+    } catch {
+      // Silently ignore
+    } finally {
+      setLoading(false)
+    }
+    setCode('')
+    setCountdown(600)
+  }
+
+  // Step 3: set new password
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (newPassword !== confirmPassword) {
       toast.error(t('settings.passwordsDoNotMatch'))
@@ -49,29 +89,16 @@ export default function ForgotPasswordPage() {
     }
   }
 
-  if (step === 'reset') {
+  if (step === 'password') {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
         <Card className="w-full max-w-sm">
           <CardHeader>
-            <CardTitle className="text-2xl">{t('auth.resetPassword')}</CardTitle>
-            <CardDescription>{t('auth.resetPasswordDesc')}</CardDescription>
+            <CardTitle className="text-2xl">{t('auth.newPasswordTitle')}</CardTitle>
+            <CardDescription>{t('auth.newPasswordDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleReset} className="space-y-4">
-              <div className="space-y-1">
-                <Label>{t('auth.resetCode')}</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder={t('auth.resetCodePlaceholder')}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                />
-              </div>
+            <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div className="space-y-1">
                 <Label>{t('settings.newPassword')}</Label>
                 <Input
@@ -99,14 +126,61 @@ export default function ForgotPasswordPage() {
                 {t('auth.resetPassword')}
               </Button>
             </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (step === 'code') {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <CardTitle className="text-2xl">{t('auth.forgotPasswordTitle')}</CardTitle>
+            <CardDescription>
+              {t('auth.resetCodeSentTo', { email })}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-4">{t('auth.codeValidFor')}</p>
+            <form onSubmit={handleCodeSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <Label>{t('auth.resetCode')}</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={t('auth.resetCodePlaceholder')}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  required
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+              </div>
+              <Button type="submit" className="w-full" loading={loading}>
+                {t('auth.verifyCode')}
+              </Button>
+            </form>
             <p className="mt-4 text-center text-sm text-muted-foreground">
-              <button
-                type="button"
-                className="text-primary hover:underline"
-                onClick={() => setStep('request')}
-              >
-                {t('auth.sendResetCode')}
-              </button>
+              {countdown > 0 ? (
+                t('auth.resendCodeIn', { seconds: String(countdown) })
+              ) : (
+                <button
+                  type="button"
+                  className="text-primary hover:underline"
+                  onClick={handleResend}
+                  disabled={loading}
+                >
+                  {t('auth.resendCode')}
+                </button>
+              )}
+            </p>
+            <p className="mt-2 text-center text-sm text-muted-foreground">
+              <Link to="/login" className="text-primary hover:underline">
+                {t('auth.backToLogin')}
+              </Link>
             </p>
           </CardContent>
         </Card>
@@ -122,7 +196,7 @@ export default function ForgotPasswordPage() {
           <CardDescription>{t('auth.forgotPasswordDesc')}</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleRequest} className="space-y-4">
+          <form onSubmit={handleEmailSubmit} className="space-y-4">
             <div className="space-y-1">
               <Label>{t('auth.email')}</Label>
               <Input
