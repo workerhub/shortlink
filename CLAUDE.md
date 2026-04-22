@@ -85,7 +85,7 @@ go-cloudflare/
 │   │   │   ├── index.ts          # App entry: mounts routes, security headers, CORS, cron handler
 │   │   │   ├── types.ts          # Env, Variables, LinkRow, UserRow, CachedLink types
 │   │   │   ├── routes/
-│   │   │   │   ├── auth.ts       # All auth: register, login, logout, refresh, 2FA setup+verify
+│   │   │   │   ├── auth.ts       # All auth: register, login, logout, refresh, 2FA setup+verify, forgot/reset password
 │   │   │   │   ├── links.ts      # Link CRUD (user-scoped)
 │   │   │   │   ├── analytics.ts  # Per-link click analytics (D1 batch queries)
 │   │   │   │   ├── admin.ts      # Admin: user mgmt, link mgmt, settings
@@ -98,7 +98,7 @@ go-cloudflare/
 │   │   │       ├── slug.ts       # generateSlug (rejection-sampling), isValidSlug, isReservedSlug, RESERVED_SLUGS
 │   │   │       ├── totp.ts       # TOTP generate/verify with otpauth library
 │   │   │       ├── webauthn.ts   # WebAuthn helpers wrapping @simplewebauthn/server
-│   │   │       ├── email.ts      # Provider dispatch: Resend API or SMTP (reads email_provider setting)
+│   │   │       ├── email.ts      # Provider dispatch: Resend API or SMTP; otpEmailHtml + resetPasswordEmailHtml templates
 │   │   │       ├── smtp.ts       # SMTP client over cloudflare:sockets (STARTTLS + implicit TLS)
 │   │   │       ├── kv.ts         # All KV operations (link cache, challenge store, rate limiting)
 │   │   │       └── ua.ts         # User-agent parsing (device/browser/OS detection)
@@ -117,7 +117,7 @@ go-cloudflare/
 │           ├── api/
 │           │   └── client.ts        # fetch wrapper with in-flight refresh dedup
 │           └── pages/
-│               ├── auth/            # Login, Register, TwoFactor pages
+│               ├── auth/            # Login, Register, TwoFactor, ForgotPassword pages
 │               ├── dashboard/       # Links list, Analytics, Account Settings
 │               └── admin/           # Users, Links overview, Global Settings
 ```
@@ -153,7 +153,7 @@ Stored AES-256-GCM encrypted in D1. The encryption key (`TOTP_ENCRYPTION_KEY`) i
 |---|---|---|
 | `link:{slug}` | Short link cache | 3600s |
 | `passkey_challenge:{id}` | WebAuthn challenge | 300s |
-| `otp_rate:{email}` | Email OTP rate limit | 3600s |
+| `otp_rate:{email}` | Email OTP rate limit (also used by forgot-password) | 600s |
 | `2fa_attempts:{jti}` | General 2FA attempt counter | 600s |
 | `passkey_opts:{jti}` | Passkey options attempt counter | 600s |
 | `totp_confirm:{userId}` | TOTP setup confirm attempt counter | 120s |
@@ -174,6 +174,13 @@ GET /:slug
 
 ### Cross-Tab Auth Sync
 `AuthContext.tsx` opens a `BroadcastChannel('auth')` on mount. After login or token refresh, the new access token is broadcast to other tabs so they don't trigger redundant refresh requests.
+
+### Forgot Password Flow
+Two-step unauthenticated password reset via email:
+1. `POST /api/auth/forgot-password` — takes `email`, generates a 6-digit code, stores in `verifications` table with `type = 'password_reset'` (10-minute TTL), sends a reset email. Always returns `{ success: true }` regardless of whether the email exists (prevents user enumeration). Rate-limited via the same `otp_rate:{email}` KV bucket as Email OTP (3 sends per 10 minutes).
+2. `POST /api/auth/reset-password` — takes `email`, `code`, `newPassword`. Validates the code hash against the `verifications` row, max 3 failed attempts before the code is locked. On success, updates `password_hash` and marks the verification as used.
+
+Frontend: `/forgot-password` page with a 2-step form (email → code + new password). Link shown on the login page.
 
 ---
 
@@ -228,6 +235,8 @@ wrangler d1 execute shortlink --command "SELECT * FROM audit_logs" --json > audi
 - All routes check `is_active` on the user before completing authentication
 - 2FA method bypass prevented: email-otp endpoints gate on `email_2fa_enabled`; TOTP on `totp_enabled`
 - Passkey registration capped at 10 per user
+- Forgot-password endpoint never reveals whether an email exists (always returns success)
+- Password reset codes: max 3 wrong attempts per code; rate-limited 3 sends per 10 min per email
 - `cf-connecting-ip` used for IP logging (cannot be forged); `x-forwarded-for` ignored
 - User-Agent and Referer headers truncated before storage (512 and 2048 bytes respectively)
 - `app_name` setting validated: 1–64 chars, no HTML-special or CR/LF characters
