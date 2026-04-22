@@ -59,6 +59,7 @@ export default function AdminLinksPage() {
                 <th className="px-4 py-3 text-left font-medium">{t('links.shortLink')}</th>
                 <th className="px-4 py-3 text-left font-medium">{t('links.destination')}</th>
                 <th className="px-4 py-3 text-left font-medium">{t('common.user')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('links.clicks')}</th>
                 <th className="px-4 py-3 text-left font-medium">{t('common.status')}</th>
                 <th className="px-4 py-3 text-left font-medium">{t('common.created')}</th>
                 <th className="px-4 py-3 text-right font-medium">{t('common.actions')}</th>
@@ -78,6 +79,7 @@ export default function AdminLinksPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{link.user_username}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{link.click_count ?? 0}</td>
                   <td className="px-4 py-3">
                     {!link.is_active ? (
                       <Badge variant="secondary">{t('common.inactive')}</Badge>

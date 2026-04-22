@@ -78,6 +78,7 @@ export const en = {
     editTitle: 'Edit Link',
     expiryFieldLabel: 'Expiry (leave empty for no expiry)',
     activeLabel: 'Active',
+    clicks: 'Clicks',
   },
   analytics: {
     title: 'Analytics',

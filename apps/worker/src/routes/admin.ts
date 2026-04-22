@@ -231,6 +231,7 @@ admin.get('/links', async (c) => {
 
   const L = tbl(c.env, 'links')
   const U = tbl(c.env, 'users')
+  const CL = tbl(c.env, 'click_logs')
   const conditions: string[] = []
   const binds: (string | number)[] = []
 
@@ -246,7 +247,8 @@ admin.get('/links', async (c) => {
   const [rows, countRow] = await c.env.DB.batch([
     c.env.DB.prepare(
       `SELECT l.rowid as seq, l.id, l.slug, l.destination_url, l.title, l.expires_at, l.is_active, l.created_at,
-              u.email as user_email, u.username as user_username
+              u.email as user_email, u.username as user_username,
+              (SELECT COUNT(*) FROM ${CL} WHERE link_id = l.id) as click_count
        FROM ${L} l JOIN ${U} u ON l.user_id = u.id
        ${where} ORDER BY l.created_at DESC LIMIT ?${binds.length + 1} OFFSET ?${binds.length + 2}`,
     ).bind(...binds, limit, offset),

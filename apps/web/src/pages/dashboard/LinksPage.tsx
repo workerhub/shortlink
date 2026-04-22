@@ -69,6 +69,7 @@ export default function LinksPage() {
                 <th className="px-4 py-3 text-left font-medium w-12">#</th>
                 <th className="px-4 py-3 text-left font-medium">{t('links.shortLink')}</th>
                 <th className="px-4 py-3 text-left font-medium">{t('links.destination')}</th>
+                <th className="px-4 py-3 text-left font-medium">{t('links.clicks')}</th>
                 <th className="px-4 py-3 text-left font-medium">{t('links.expiry')}</th>
                 <th className="px-4 py-3 text-left font-medium">{t('common.status')}</th>
                 <th className="px-4 py-3 text-left font-medium">{t('common.created')}</th>
@@ -107,6 +108,7 @@ export default function LinksPage() {
                       </a>
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-muted-foreground">{link.click_count ?? 0}</td>
                   <td className="px-4 py-3 text-muted-foreground">{expiryLabel(link.expires_at)}</td>
                   <td className="px-4 py-3">
                     {!link.is_active ? (

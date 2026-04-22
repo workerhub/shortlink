@@ -80,6 +80,7 @@ export const zhCN: Translations = {
     editTitle: '编辑链接',
     expiryFieldLabel: '过期时间（留空则永不过期）',
     activeLabel: '已启用',
+    clicks: '访问次数',
   },
   analytics: {
     title: '统计分析',

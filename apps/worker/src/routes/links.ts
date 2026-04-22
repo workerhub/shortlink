@@ -36,17 +36,20 @@ links.get('/', async (c) => {
   const binds: (string | number)[] = [userId]
   const safe = search.replace(/[%_\\]/g, '\\$&')
   const L = tbl(c.env, 'links')
+  const CL = tbl(c.env, 'click_logs')
 
   if (search) {
-    query = `SELECT id, slug, destination_url, title, expires_at, is_active, user_seq, created_at
-             FROM ${L} WHERE user_id = ?1 AND (slug LIKE ?2 ESCAPE '\\' OR destination_url LIKE ?2 ESCAPE '\\' OR title LIKE ?2 ESCAPE '\\')
-             ORDER BY created_at DESC LIMIT ?3 OFFSET ?4`
-    countQuery = `SELECT COUNT(*) as n FROM ${L} WHERE user_id = ?1 AND (slug LIKE ?2 ESCAPE '\\' OR destination_url LIKE ?2 ESCAPE '\\' OR title LIKE ?2 ESCAPE '\\')`
+    query = `SELECT l.id, l.slug, l.destination_url, l.title, l.expires_at, l.is_active, l.user_seq, l.created_at,
+                    (SELECT COUNT(*) FROM ${CL} WHERE link_id = l.id) as click_count
+             FROM ${L} l WHERE l.user_id = ?1 AND (l.slug LIKE ?2 ESCAPE '\\' OR l.destination_url LIKE ?2 ESCAPE '\\' OR l.title LIKE ?2 ESCAPE '\\')
+             ORDER BY l.created_at DESC LIMIT ?3 OFFSET ?4`
+    countQuery = `SELECT COUNT(*) as n FROM ${L} l WHERE l.user_id = ?1 AND (l.slug LIKE ?2 ESCAPE '\\' OR l.destination_url LIKE ?2 ESCAPE '\\' OR l.title LIKE ?2 ESCAPE '\\')`
     binds.push(`%${safe}%`, limit, offset)
   } else {
-    query = `SELECT id, slug, destination_url, title, expires_at, is_active, user_seq, created_at
-             FROM ${L} WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3`
-    countQuery = `SELECT COUNT(*) as n FROM ${L} WHERE user_id = ?1`
+    query = `SELECT l.id, l.slug, l.destination_url, l.title, l.expires_at, l.is_active, l.user_seq, l.created_at,
+                    (SELECT COUNT(*) FROM ${CL} WHERE link_id = l.id) as click_count
+             FROM ${L} l WHERE l.user_id = ?1 ORDER BY l.created_at DESC LIMIT ?2 OFFSET ?3`
+    countQuery = `SELECT COUNT(*) as n FROM ${L} l WHERE l.user_id = ?1`
     binds.push(limit, offset)
   }
 

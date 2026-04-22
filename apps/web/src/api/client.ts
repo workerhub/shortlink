@@ -233,6 +233,7 @@ export interface Link {
   user_seq: number
   created_at: number
   updated_at?: number
+  click_count?: number
 }
 
 export interface CreateLinkPayload {
