@@ -64,6 +64,7 @@ export interface LinkRow {
   title: string | null
   expires_at: number | null
   is_active: number
+  user_seq: number
   created_at: number
   updated_at: number
 }

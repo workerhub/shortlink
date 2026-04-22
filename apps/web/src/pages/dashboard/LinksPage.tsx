@@ -64,10 +64,11 @@ export default function LinksPage() {
           No links yet. Create your first one!
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
+                <th className="px-4 py-3 text-left font-medium w-12">#</th>
                 <th className="px-4 py-3 text-left font-medium">Short Link</th>
                 <th className="px-4 py-3 text-left font-medium">Destination</th>
                 <th className="px-4 py-3 text-left font-medium">Expiry</th>
@@ -79,6 +80,7 @@ export default function LinksPage() {
             <tbody>
               {data.links.map((link) => (
                 <tr key={link.id} className="border-b last:border-0 hover:bg-muted/20">
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{link.user_seq}</td>
                   <td className="px-4 py-3 font-mono">
                     <div className="flex items-center gap-1">
                       <span className="text-primary">{link.slug}</span>
@@ -345,7 +347,7 @@ function CreateLinkDialog({
 
 // ─── Edit Link Dialog ──────────────────────────────────────────────────────────
 
-function EditLinkDialog({
+export function EditLinkDialog({
   link,
   open,
   onOpenChange,
@@ -362,6 +364,7 @@ function EditLinkDialog({
     title: link.title ?? '',
     isActive: !!link.is_active,
   })
+  const [expiresAt, setExpiresAt] = useState<number | null>(link.expires_at)
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -373,6 +376,7 @@ function EditLinkDialog({
         customSlug: form.customSlug,
         title: form.title || undefined,
         isActive: form.isActive,
+        expiresAt,
       })
       toast.success('Link updated')
       onUpdated()
@@ -382,6 +386,10 @@ function EditLinkDialog({
       setLoading(false)
     }
   }
+
+  const expiresAtInputValue = expiresAt
+    ? new Date(expiresAt * 1000).toISOString().slice(0, 16)
+    : ''
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -412,6 +420,18 @@ function EditLinkDialog({
             <Input
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label>Expiry (leave empty for no expiry)</Label>
+            <Input
+              type="datetime-local"
+              value={expiresAtInputValue}
+              onChange={(e) =>
+                setExpiresAt(
+                  e.target.value ? Math.floor(new Date(e.target.value).getTime() / 1000) : null,
+                )
+              }
             />
           </div>
           <div className="flex items-center gap-2">

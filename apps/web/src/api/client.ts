@@ -230,6 +230,7 @@ export interface Link {
   title: string | null
   expires_at: number | null
   is_active: number
+  user_seq: number
   created_at: number
   updated_at?: number
 }
@@ -306,7 +307,7 @@ export const adminApi = {
     if (params?.page) qs.set('page', String(params.page))
     if (params?.search) qs.set('search', params.search)
     if (params?.userId) qs.set('userId', params.userId)
-    return request<{ links: Array<Link & { user_email: string; user_username: string }>; pagination: { page: number; limit: number; total: number; pages: number } }>(
+    return request<{ links: Array<Link & { seq: number; user_email: string; user_username: string }>; pagination: { page: number; limit: number; total: number; pages: number } }>(
       `/admin/links?${qs}`,
     )
   },

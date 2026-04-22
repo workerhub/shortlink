@@ -38,13 +38,13 @@ links.get('/', async (c) => {
   const safe = search.replace(/[%_\\]/g, '\\$&')
 
   if (search) {
-    query = `SELECT id, slug, destination_url, title, expires_at, is_active, created_at
+    query = `SELECT id, slug, destination_url, title, expires_at, is_active, user_seq, created_at
              FROM links WHERE user_id = ?1 AND (slug LIKE ?2 ESCAPE '\\' OR destination_url LIKE ?2 ESCAPE '\\' OR title LIKE ?2 ESCAPE '\\')
              ORDER BY created_at DESC LIMIT ?3 OFFSET ?4`
     countQuery = `SELECT COUNT(*) as n FROM links WHERE user_id = ?1 AND (slug LIKE ?2 ESCAPE '\\' OR destination_url LIKE ?2 ESCAPE '\\' OR title LIKE ?2 ESCAPE '\\')`
     binds.push(`%${safe}%`, limit, offset)
   } else {
-    query = `SELECT id, slug, destination_url, title, expires_at, is_active, created_at
+    query = `SELECT id, slug, destination_url, title, expires_at, is_active, user_seq, created_at
              FROM links WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3`
     countQuery = `SELECT COUNT(*) as n FROM links WHERE user_id = ?1`
     binds.push(limit, offset)
@@ -142,9 +142,9 @@ links.post('/', async (c) => {
   }
 
   const row = await c.env.DB.prepare(
-    `INSERT INTO links (user_id, slug, destination_url, title, expires_at)
-     VALUES (?1, ?2, ?3, ?4, ?5)
-     RETURNING id, slug, destination_url, title, expires_at, is_active, created_at`,
+    `INSERT INTO links (user_id, slug, destination_url, title, expires_at, user_seq)
+     VALUES (?1, ?2, ?3, ?4, ?5, (SELECT COALESCE(MAX(user_seq), 0) + 1 FROM links WHERE user_id = ?1))
+     RETURNING id, slug, destination_url, title, expires_at, is_active, user_seq, created_at`,
   )
     .bind(userId, slug, body.destinationUrl, body.title ?? null, expiresAt)
     .first<LinkRow>()

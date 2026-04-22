@@ -1,20 +1,22 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { adminApi } from '@/api/client'
+import { adminApi, linksApi } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { Search, Trash2, ExternalLink } from 'lucide-react'
+import { Search, Trash2, ExternalLink, Pencil } from 'lucide-react'
 import { isExpired, formatDate } from '@/lib/utils'
-import { getAccessToken } from '@/api/client'
+import { EditLinkDialog } from '@/pages/dashboard/LinksPage'
+import type { Link } from '@/api/client'
 
 export default function AdminLinksPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [editLink, setEditLink] = useState<Link | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-links', page, search],
@@ -22,16 +24,13 @@ export default function AdminLinksPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/admin/links/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
-      }).then((r) => r.json()),
+    mutationFn: (id: string) => linksApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-links'] })
       toast.success('Link deleted')
       setDeleteId(null)
     },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Delete failed'),
   })
 
   return (
@@ -50,10 +49,11 @@ export default function AdminLinksPage() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/50">
+                <th className="px-4 py-3 text-left font-medium w-12">#</th>
                 <th className="px-4 py-3 text-left font-medium">Slug</th>
                 <th className="px-4 py-3 text-left font-medium">Destination</th>
                 <th className="px-4 py-3 text-left font-medium">User</th>
@@ -65,6 +65,7 @@ export default function AdminLinksPage() {
             <tbody>
               {data?.links.map((link) => (
                 <tr key={link.id} className="border-b last:border-0 hover:bg-muted/20">
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{link.seq}</td>
                   <td className="px-4 py-3 font-mono text-primary">{link.slug}</td>
                   <td className="px-4 py-3 max-w-xs">
                     <div className="flex items-center gap-1">
@@ -86,7 +87,10 @@ export default function AdminLinksPage() {
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(link.created_at)}</td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => setEditLink(link)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -112,6 +116,19 @@ export default function AdminLinksPage() {
             <Button variant="outline" size="sm" disabled={page >= data.pagination.pages} onClick={() => setPage((p) => p + 1)}>Next</Button>
           </div>
         </div>
+      )}
+
+      {/* Edit Dialog */}
+      {editLink && (
+        <EditLinkDialog
+          link={editLink}
+          open={!!editLink}
+          onOpenChange={(o) => !o && setEditLink(null)}
+          onUpdated={() => {
+            queryClient.invalidateQueries({ queryKey: ['admin-links'] })
+            setEditLink(null)
+          }}
+        />
       )}
 
       <Dialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
