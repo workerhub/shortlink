@@ -84,6 +84,24 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+export function resetPasswordEmailHtml(appName: string, code: string): string {
+  const safeApp = escHtml(appName)
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family:sans-serif;max-width:480px;margin:40px auto;padding:0 16px">
+  <h2 style="color:#1a1a1a">${safeApp} — Password Reset</h2>
+  <p style="color:#444;font-size:15px">You requested a password reset. Enter the code below to set a new password:</p>
+  <div style="background:#f4f4f5;border-radius:8px;padding:24px;text-align:center;margin:24px 0">
+    <span style="font-size:36px;font-weight:700;letter-spacing:8px;color:#1a1a1a">${code}</span>
+  </div>
+  <p style="color:#888;font-size:13px">This code expires in 10 minutes. If you did not request this, you can safely ignore this email.</p>
+</body>
+</html>
+  `.trim()
+}
+
 export function otpEmailHtml(appName: string, code: string): string {
   const safeApp = escHtml(appName)
   return `

@@ -141,6 +141,20 @@ export const authApi = {
       skipAuth: true,
     }),
 
+  // Forgot / Reset Password
+  forgotPassword: (email: string) =>
+    request<{ success: boolean }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+      skipAuth: true,
+    }),
+  resetPassword: (email: string, code: string, newPassword: string) =>
+    request<{ success: boolean }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, code, newPassword }),
+      skipAuth: true,
+    }),
+
   // TOTP
   totpSetup: () => request<{ secret: string; uri: string }>('/auth/2fa/totp/setup'),
   totpConfirm: (code: string) =>

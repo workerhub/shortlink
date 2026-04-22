@@ -35,6 +35,7 @@ export const RESERVED_SLUGS = new Set([
   'api',
   'two-factor',
   'two_factor',
+  'forgot-password',
   '404',
   '500',
   'setup',

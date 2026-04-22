@@ -41,7 +41,7 @@ import {
   verifyPasskeyAuthentication,
   uint8ArrayToBase64Url,
 } from '../lib/webauthn.js'
-import { sendEmail, otpEmailHtml } from '../lib/email.js'
+import { sendEmail, otpEmailHtml, resetPasswordEmailHtml } from '../lib/email.js'
 import { requireAuth } from '../middleware/auth.js'
 import { tbl } from '../lib/db.js'
 import type { Env, Variables, UserRow, PasskeyRow } from '../types.js'
@@ -1048,6 +1048,117 @@ auth.post('/2fa/passkey/verify', async (c) => {
     accessToken: tokens.accessToken,
     user: { id: user.id, email: user.email, username: user.username, role: user.role },
   })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Forgot / Reset Password
+// ═════════════════════════════════════════════════════════════════════════════
+
+// POST /api/auth/forgot-password
+auth.post('/forgot-password', async (c) => {
+  const body = await c.req.json<{ email: string }>().catch(() => null)
+  if (!body?.email) return c.json({ success: true }) // silent — no enumeration
+
+  const email = body.email.trim().toLowerCase()
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return c.json({ success: true })
+
+  // Rate limit using same KV bucket as email OTP
+  const allowed = await checkOtpRateLimit(c.env.LINKS_KV, email)
+  if (!allowed) {
+    return c.json({ error: 'Too many requests. Try again later.' }, 429)
+  }
+
+  const user = await c.env.DB.prepare(
+    `SELECT id FROM ${tbl(c.env, 'users')} WHERE email = ?1 AND is_active = 1`,
+  )
+    .bind(email)
+    .first<{ id: string }>()
+
+  if (!user) return c.json({ success: true }) // silent — no enumeration
+
+  const code = generateOtp(6)
+  const codeHash = await sha256(code)
+  const expiresAt = Math.floor(Date.now() / 1000) + 600
+  const appName = await getAppName(c.env)
+
+  try {
+    await sendEmail(c.env, {
+      to: email,
+      subject: `${appName} — Password Reset`,
+      html: resetPasswordEmailHtml(appName, code),
+    })
+  } catch {
+    return c.json({ error: 'Failed to send email. Please try again.' }, 500)
+  }
+
+  // Invalidate any previous unused reset codes for this email
+  await c.env.DB.prepare(
+    `DELETE FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'password_reset' AND used = 0`,
+  )
+    .bind(email)
+    .run()
+
+  await c.env.DB.prepare(
+    `INSERT INTO ${tbl(c.env, 'verifications')} (identifier, type, code_hash, expires_at) VALUES (?1, ?2, ?3, ?4)`,
+  )
+    .bind(email, 'password_reset', codeHash, expiresAt)
+    .run()
+
+  return c.json({ success: true })
+})
+
+// POST /api/auth/reset-password
+auth.post('/reset-password', async (c) => {
+  const body = await c.req.json<{ email: string; code: string; newPassword: string }>().catch(() => null)
+  if (!body) return c.json({ error: 'Invalid JSON body' }, 400)
+  if (!body.email || !body.code || !body.newPassword) {
+    return c.json({ error: 'email, code, and newPassword are required' }, 400)
+  }
+  if (body.code.length > 6) return c.json({ error: 'Invalid code' }, 400)
+  if (body.newPassword.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400)
+  if (body.newPassword.length > 256) return c.json({ error: 'Password too long' }, 400)
+
+  const email = body.email.trim().toLowerCase()
+
+  const user = await c.env.DB.prepare(
+    `SELECT id FROM ${tbl(c.env, 'users')} WHERE email = ?1 AND is_active = 1`,
+  )
+    .bind(email)
+    .first<{ id: string }>()
+  if (!user) return c.json({ error: 'Invalid or expired code' }, 400)
+
+  const now = Math.floor(Date.now() / 1000)
+  const verification = await c.env.DB.prepare(
+    `SELECT * FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'password_reset' AND used = 0 AND expires_at > ?2 ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(email, now)
+    .first<{ id: string; code_hash: string; attempts: number }>()
+
+  if (!verification) return c.json({ error: 'Invalid or expired code' }, 400)
+
+  if (verification.attempts >= 3) {
+    return c.json({ error: 'Too many failed attempts. Please request a new code.' }, 429)
+  }
+
+  const inputHash = await sha256(body.code)
+  if (inputHash !== verification.code_hash) {
+    await c.env.DB.prepare(
+      `UPDATE ${tbl(c.env, 'verifications')} SET attempts = attempts + 1 WHERE id = ?1`,
+    )
+      .bind(verification.id)
+      .run()
+    return c.json({ error: 'Invalid code' }, 400)
+  }
+
+  const newHash = await hashPassword(body.newPassword)
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE ${tbl(c.env, 'verifications')} SET used = 1 WHERE id = ?1`).bind(verification.id),
+    c.env.DB.prepare(
+      `UPDATE ${tbl(c.env, 'users')} SET password_hash = ?1, updated_at = unixepoch() WHERE id = ?2`,
+    ).bind(newHash, user.id),
+  ])
+
+  return c.json({ success: true })
 })
 
 export default auth

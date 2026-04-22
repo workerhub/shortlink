@@ -3,6 +3,7 @@ import { useAuth } from './contexts/AuthContext.tsx'
 import LoginPage from './pages/auth/LoginPage.tsx'
 import RegisterPage from './pages/auth/RegisterPage.tsx'
 import TwoFactorPage from './pages/auth/TwoFactorPage.tsx'
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage.tsx'
 import DashboardLayout from './components/layout/DashboardLayout.tsx'
 import LinksPage from './pages/dashboard/LinksPage.tsx'
 import AnalyticsPage from './pages/dashboard/AnalyticsPage.tsx'
@@ -36,6 +37,7 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/two-factor" element={<TwoFactorPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
       {/* Dashboard */}
       <Route
