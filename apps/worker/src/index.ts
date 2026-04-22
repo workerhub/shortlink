@@ -79,6 +79,10 @@ app.get('/:slug', async (c, next) => {
   if (SPA_PREFIXES.has(`/${slug}`)) {
     return next()
   }
+  // Static files (e.g. logo.svg, favicon.ico) — slugs never contain dots
+  if (slug.includes('.')) {
+    return next()
+  }
   return redirectHandler.fetch(c.req.raw, c.env, c.executionCtx)
 })
 
