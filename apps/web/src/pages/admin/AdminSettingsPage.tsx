@@ -19,6 +19,7 @@ export default function AdminSettingsPage() {
   })
 
   const [registrationEnabled, setRegistrationEnabled] = useState(false)
+  const [requireEmailVerification, setRequireEmailVerification] = useState(false)
   const [appName, setAppName] = useState('')
   const [savingAppName, setSavingAppName] = useState(false)
 
@@ -40,6 +41,7 @@ export default function AdminSettingsPage() {
     if (data?.settings) {
       const s = data.settings
       setRegistrationEnabled(s['registration_enabled'] === 'true')
+      setRequireEmailVerification(s['require_email_verification'] === 'true')
       setAppName(s['app_name'] ?? 'ShortLink')
       setEmailProvider((s['email_provider'] as 'resend' | 'smtp') ?? 'resend')
       setResendApiKey(s['resend_api_key'] ?? '')
@@ -60,6 +62,17 @@ export default function AdminSettingsPage() {
       toast.success(`Registration ${enabled ? 'enabled' : 'disabled'}`)
     } catch (err) {
       setRegistrationEnabled(!enabled)
+      toast.error(err instanceof Error ? err.message : 'Failed')
+    }
+  }
+
+  const handleRequireEmailVerificationToggle = async (enabled: boolean) => {
+    setRequireEmailVerification(enabled)
+    try {
+      await adminApi.updateSettings({ require_email_verification: enabled ? 'true' : 'false' })
+      toast.success(enabled ? t('admin.emailVerificationEnabled') : t('admin.emailVerificationDisabled'))
+    } catch (err) {
+      setRequireEmailVerification(!enabled)
       toast.error(err instanceof Error ? err.message : 'Failed')
     }
   }
@@ -123,6 +136,27 @@ export default function AdminSettingsPage() {
             <Label htmlFor="reg-toggle">
               {t('admin.registrationCurrent')}{' '}
               <strong>{registrationEnabled ? t('admin.open') : t('admin.closed')}</strong>
+            </Label>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email verification toggle */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t('admin.emailVerificationToggle')}</CardTitle>
+          <CardDescription>{t('admin.emailVerificationDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3">
+            <Switch
+              id="email-verify-toggle"
+              checked={requireEmailVerification}
+              onCheckedChange={handleRequireEmailVerificationToggle}
+            />
+            <Label htmlFor="email-verify-toggle">
+              {t('admin.emailVerificationCurrent')}{' '}
+              <strong>{requireEmailVerification ? t('admin.emailVerificationRequired') : t('admin.emailVerificationNotRequired')}</strong>
             </Label>
           </div>
         </CardContent>

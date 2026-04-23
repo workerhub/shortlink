@@ -284,6 +284,7 @@ admin.put('/settings', async (c) => {
   if (!body) return c.json({ error: 'Invalid JSON body' }, 400)
   const allowedKeys = new Set([
     'registration_enabled',
+    'require_email_verification',
     'app_name',
     'email_provider',
     'resend_api_key',

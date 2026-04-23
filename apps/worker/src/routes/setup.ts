@@ -95,8 +95,9 @@ CREATE TABLE IF NOT EXISTS ${t('settings')} (
   updated_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 INSERT OR IGNORE INTO ${t('settings')} (key, value) VALUES
-  ('registration_enabled', 'true'),
-  ('app_name',             'ShortLink'),
+  ('registration_enabled',       'true'),
+  ('require_email_verification', 'false'),
+  ('app_name',                   'ShortLink'),
   ('email_provider',       'resend'),
   ('smtp_host',            ''),
   ('smtp_port',            '587'),

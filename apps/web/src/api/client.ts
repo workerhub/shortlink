@@ -109,9 +109,15 @@ export interface LoginResult {
   user?: User
 }
 
+export interface RegisterResult {
+  user?: User
+  requiresEmailVerification?: boolean
+  userId?: string
+}
+
 export const authApi = {
   register: (email: string, username: string, password: string) =>
-    request<{ user: User }>('/auth/register', {
+    request<RegisterResult>('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ email, username, password }),
       skipAuth: true,
@@ -138,6 +144,20 @@ export const authApi = {
   refresh: () =>
     request<{ accessToken: string }>('/auth/refresh', {
       method: 'POST',
+      skipAuth: true,
+    }),
+
+  // Email verification (registration)
+  verifyEmail: (userId: string, code: string) =>
+    request<LoginResult>('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ userId, code }),
+      skipAuth: true,
+    }),
+  resendVerifyEmail: (userId: string) =>
+    request<{ success: boolean }>('/auth/resend-verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
       skipAuth: true,
     }),
 
