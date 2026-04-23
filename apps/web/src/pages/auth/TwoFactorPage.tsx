@@ -81,7 +81,7 @@ export default function TwoFactorPage() {
     setLoading(true)
     try {
       const { options, challengeId } = await authApi.passkeyVerifyOptions(pendingToken)
-      const response = await startAuthentication(options)
+      const response = await startAuthentication({ optionsJSON: options })
       const result = await authApi.passkeyVerify(pendingToken, response, challengeId)
       handleSuccess(result)
     } catch (err) {
