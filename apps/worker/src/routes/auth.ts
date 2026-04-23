@@ -859,7 +859,7 @@ auth.post('/2fa/passkey/register-options', requireAuth, async (c) => {
   const options = await generateRegistrationOptions({
     rpName: c.env.APP_NAME,
     rpID: c.env.RP_ID,
-    userID: new TextEncoder().encode(userId),
+    userID: new TextEncoder().encode(userId) as Uint8Array<ArrayBuffer>,
     userName: userEmail,
     excludeCredentials: existingPasskeys.results.map((pk) => ({
       id: pk.id,
@@ -913,7 +913,7 @@ auth.post('/2fa/passkey/register-verify', requireAuth, async (c) => {
     return c.json({ error: 'Passkey verification failed' }, 400)
   }
 
-  const { credentialID, credentialPublicKey, counter } = verification.registrationInfo
+  const { id: credentialID, publicKey: credentialPublicKey, counter } = verification.registrationInfo.credential
   const publicKeyB64 = uint8ArrayToBase64Url(credentialPublicKey)
   const responseBody = body.response as { response?: { transports?: unknown[] } }
   const transports = (responseBody.response?.transports ?? [])

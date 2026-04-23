@@ -40,11 +40,11 @@ export async function verifyPasskeyAuthentication(
     expectedOrigin: origin,
     expectedRPID: rpID,
     requireUserVerification: true,
-    authenticator: {
-      credentialID: passkey.id,
-      credentialPublicKey: base64UrlToUint8Array(passkey.public_key),
+    credential: {
+      id: passkey.id,
+      publicKey: base64UrlToUint8Array(passkey.public_key) as Uint8Array<ArrayBuffer>,
       counter: passkey.counter,
-      transports: transports as Parameters<typeof verifyAuthenticationResponse>[0]['authenticator']['transports'],
+      transports: transports as Parameters<typeof verifyAuthenticationResponse>[0]['credential']['transports'],
     },
   })
 }

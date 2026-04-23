@@ -357,7 +357,7 @@ export const adminApi = {
 }
 
 // Re-export WebAuthn types used by auth API
-type PublicKeyCredentialCreationOptionsJSON = import('@simplewebauthn/types').PublicKeyCredentialCreationOptionsJSON
-type PublicKeyCredentialRequestOptionsJSON = import('@simplewebauthn/types').PublicKeyCredentialRequestOptionsJSON
-type RegistrationResponseJSON = import('@simplewebauthn/types').RegistrationResponseJSON
-type AuthenticationResponseJSON = import('@simplewebauthn/types').AuthenticationResponseJSON
+type PublicKeyCredentialCreationOptionsJSON = import('@simplewebauthn/browser').PublicKeyCredentialCreationOptionsJSON
+type PublicKeyCredentialRequestOptionsJSON = import('@simplewebauthn/browser').PublicKeyCredentialRequestOptionsJSON
+type RegistrationResponseJSON = import('@simplewebauthn/browser').RegistrationResponseJSON
+type AuthenticationResponseJSON = import('@simplewebauthn/browser').AuthenticationResponseJSON

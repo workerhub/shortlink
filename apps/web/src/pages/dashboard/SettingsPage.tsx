@@ -357,7 +357,7 @@ function PasskeyCard({ onUpdate }: { onUpdate: () => Promise<void> }) {
     setLoading(true)
     try {
       const { options, challengeId } = await authApi.passkeyRegisterOptions()
-      const response = await startRegistration(options)
+      const response = await startRegistration({ optionsJSON: options })
       await authApi.passkeyRegisterVerify(response, challengeId, newName || undefined)
       toast.success('Passkey registered!')
       setNewName('')

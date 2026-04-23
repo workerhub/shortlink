@@ -233,9 +233,12 @@ export default function AnalyticsPage() {
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
-                      label={({ device_type, percent }) =>
-                        `${device_type} ${(percent * 100).toFixed(0)}%`
-                      }
+                      label={(props) => {
+                        const device_type = props.name
+                        const percent = props.percent
+                        if (percent === undefined) return ''
+                        return `${device_type} ${(percent * 100).toFixed(0)}%`
+                      }}
                     >
                       {stats.devices.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
