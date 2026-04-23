@@ -14,7 +14,7 @@
     "hono": "^4.6.12",
     "jose": "^5.9.6",
     "otpauth": "^9.3.6",
-    "@simplewebauthn/server": "^10.0.0"
+    "@simplewebauthn/server": "^13.0.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",
