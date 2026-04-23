@@ -4,9 +4,10 @@
   "schedule": ["before 6am on monday"],
   "timezone": "UTC",
   "automerge": false,
+  "platformAutomerge": true,
   "packageRules": [
     {
-      "matchUpdateTypes": ["patch"],
+      "matchUpdateTypes": ["patch", "minor"],
       "automerge": true
     },
     {
