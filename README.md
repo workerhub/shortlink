@@ -265,4 +265,4 @@ All variables and secrets are managed in the **Cloudflare dashboard** (Workers &
 
 ## License
 
-MIT
+[MIT](./LICENSE)
