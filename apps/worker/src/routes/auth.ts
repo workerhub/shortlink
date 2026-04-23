@@ -41,7 +41,7 @@ import {
   verifyPasskeyAuthentication,
   uint8ArrayToBase64Url,
 } from '../lib/webauthn.js'
-import { sendEmail, otpEmailHtml, resetPasswordEmailHtml } from '../lib/email.js'
+import { sendEmail, otpEmailHtml, resetPasswordEmailHtml, verifyEmailHtml } from '../lib/email.js'
 import { requireAuth } from '../middleware/auth.js'
 import { tbl } from '../lib/db.js'
 import type { Env, Variables, UserRow, PasskeyRow } from '../types.js'
@@ -94,6 +94,16 @@ async function isRegistrationEnabled(env: Env): Promise<boolean> {
     .first<{ value: string }>()
   const val = row?.value ?? 'false'
   await setCachedSetting(env.LINKS_KV, 'registration_enabled', val)
+  return val === 'true'
+}
+
+async function isEmailVerificationRequired(env: Env): Promise<boolean> {
+  const cached = await getCachedSetting(env.LINKS_KV, 'require_email_verification')
+  if (cached !== null) return cached === 'true'
+  const row = await env.DB.prepare(`SELECT value FROM ${tbl(env, 'settings')} WHERE key = 'require_email_verification'`)
+    .first<{ value: string }>()
+  const val = row?.value ?? 'false'
+  await setCachedSetting(env.LINKS_KV, 'require_email_verification', val)
   return val === 'true'
 }
 
@@ -177,6 +187,46 @@ auth.post('/register', async (c) => {
 
   const passwordHash = await hashPassword(password)
 
+  // If email verification is required (non-first user only), create account as inactive
+  // and send a verification code before the user can log in.
+  if (!isFirstUser && await isEmailVerificationRequired(c.env)) {
+    const newUser = await c.env.DB.prepare(
+      `INSERT INTO ${tbl(c.env, 'users')} (email, username, password_hash, role, is_active)
+       VALUES (?1, ?2, ?3, 'user', 0)
+       RETURNING id, email, username, role`,
+    )
+      .bind(email, username, passwordHash)
+      .first<{ id: string; email: string; username: string; role: string }>()
+
+    if (!newUser) return c.json({ error: 'Failed to create user' }, 500)
+
+    const code = generateOtp(6)
+    const codeHash = await sha256(code)
+    const expiresAt = Math.floor(Date.now() / 1000) + 600
+    const appName = await getAppName(c.env)
+
+    try {
+      await sendEmail(c.env, {
+        to: email,
+        subject: `${appName} — Verify your email`,
+        html: verifyEmailHtml(appName, code),
+      })
+    } catch {
+      // Roll back the user insert. No verification row exists yet (it's inserted
+      // below only on email success), so no additional cleanup is needed.
+      await c.env.DB.prepare(`DELETE FROM ${tbl(c.env, 'users')} WHERE id = ?1`).bind(newUser.id).run()
+      return c.json({ error: 'Failed to send verification email. Please try again.' }, 500)
+    }
+
+    await c.env.DB.prepare(
+      `INSERT INTO ${tbl(c.env, 'verifications')} (identifier, type, code_hash, expires_at) VALUES (?1, ?2, ?3, ?4)`,
+    )
+      .bind(newUser.id, 'email_verify', codeHash, expiresAt)
+      .run()
+
+    return c.json({ requiresEmailVerification: true, userId: newUser.id }, 201)
+  }
+
   // H3: Role assigned atomically inside SQL — prevents bootstrap race condition
   const result = await c.env.DB.prepare(
     `INSERT INTO ${tbl(c.env, 'users')} (email, username, password_hash, role)
@@ -192,6 +242,110 @@ auth.post('/register', async (c) => {
     { user: { id: result.id, email: result.email, username: result.username, role: result.role } },
     201,
   )
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/auth/verify-email
+// ─────────────────────────────────────────────────────────────────────────────
+auth.post('/verify-email', async (c) => {
+  const body = await c.req.json<{ userId: string; code: string }>().catch(() => null)
+  if (!body) return c.json({ error: 'Invalid JSON body' }, 400)
+  if (!body.userId || !body.code || body.code.length > 6) {
+    return c.json({ error: 'userId and code required' }, 400)
+  }
+
+  const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
+    .bind(body.userId)
+    .first<UserRow>()
+
+  if (!user || user.is_active) {
+    return c.json({ error: 'Invalid or expired verification' }, 400)
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+  const verification = await c.env.DB.prepare(
+    `SELECT * FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'email_verify' AND used = 0 AND expires_at > ?2 ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(body.userId, now)
+    .first<{ id: string; code_hash: string; attempts: number }>()
+
+  if (!verification) {
+    return c.json({ error: 'Invalid or expired verification code' }, 400)
+  }
+
+  if (verification.attempts >= 3) {
+    return c.json({ error: 'Too many failed attempts. Please request a new code.' }, 429)
+  }
+
+  const inputHash = await sha256(body.code)
+  if (inputHash !== verification.code_hash) {
+    await c.env.DB.prepare(`UPDATE ${tbl(c.env, 'verifications')} SET attempts = attempts + 1 WHERE id = ?1`)
+      .bind(verification.id)
+      .run()
+    return c.json({ error: 'Invalid code' }, 401)
+  }
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE ${tbl(c.env, 'users')} SET is_active = 1, updated_at = unixepoch() WHERE id = ?1`).bind(body.userId),
+    c.env.DB.prepare(`UPDATE ${tbl(c.env, 'verifications')} SET used = 1 WHERE id = ?1`).bind(verification.id),
+  ])
+
+  const tokens = await issueTokens(user, c.env.JWT_SECRET)
+  setRefreshCookie(c, tokens.refreshToken)
+  return c.json({
+    accessToken: tokens.accessToken,
+    user: { id: user.id, email: user.email, username: user.username, role: user.role },
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/auth/resend-verify-email
+// ─────────────────────────────────────────────────────────────────────────────
+auth.post('/resend-verify-email', async (c) => {
+  const body = await c.req.json<{ userId: string }>().catch(() => null)
+  if (!body) return c.json({ error: 'Invalid JSON body' }, 400)
+  if (!body.userId) return c.json({ error: 'userId required' }, 400)
+
+  const user = await c.env.DB.prepare(`SELECT * FROM ${tbl(c.env, 'users')} WHERE id = ?1`)
+    .bind(body.userId)
+    .first<UserRow>()
+
+  // Always return success to avoid leaking whether the userId is valid
+  if (!user || user.is_active) return c.json({ success: true })
+
+  const allowed = await checkOtpRateLimit(c.env.LINKS_KV, user.email)
+  if (!allowed) {
+    return c.json({ error: 'Too many requests. Try again later.' }, 429)
+  }
+
+  const code = generateOtp(6)
+  const codeHash = await sha256(code)
+  const expiresAt = Math.floor(Date.now() / 1000) + 600
+  const appName = await getAppName(c.env)
+
+  try {
+    await sendEmail(c.env, {
+      to: user.email,
+      subject: `${appName} — Verify your email`,
+      html: verifyEmailHtml(appName, code),
+    })
+  } catch {
+    return c.json({ error: 'Failed to send verification email. Please try again.' }, 500)
+  }
+
+  await c.env.DB.prepare(
+    `DELETE FROM ${tbl(c.env, 'verifications')} WHERE identifier = ?1 AND type = 'email_verify' AND used = 0`,
+  )
+    .bind(body.userId)
+    .run()
+
+  await c.env.DB.prepare(
+    `INSERT INTO ${tbl(c.env, 'verifications')} (identifier, type, code_hash, expires_at) VALUES (?1, ?2, ?3, ?4)`,
+  )
+    .bind(body.userId, 'email_verify', codeHash, expiresAt)
+    .run()
+
+  return c.json({ success: true })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────

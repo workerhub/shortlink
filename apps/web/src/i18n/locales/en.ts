@@ -69,6 +69,11 @@ export const en = {
     resetCodePlaceholder: '6-digit code',
     resetSuccess: 'Password reset successfully. Please sign in.',
     backToLogin: 'Back to login',
+    verifyEmailTitle: 'Verify your email',
+    verifyEmailDesc: 'A verification code has been sent to {{email}}. Enter it below to activate your account.',
+    verificationCode: 'Verification Code',
+    accountCreated: 'Account created! Please sign in.',
+    verifyCodeResent: 'Verification code resent.',
   },
   links: {
     title: 'My Links',
@@ -191,6 +196,13 @@ export const en = {
     provider: 'Provider',
     deleteLink: 'Delete Link',
     deleteLinkDesc: 'This will permanently delete the short link.',
+    emailVerificationToggle: 'Email Verification on Registration',
+    emailVerificationDesc: 'Require new users to verify their email address before they can sign in.',
+    emailVerificationCurrent: 'Email verification is currently',
+    emailVerificationEnabled: 'Email verification enabled',
+    emailVerificationDisabled: 'Email verification disabled',
+    emailVerificationRequired: 'required',
+    emailVerificationNotRequired: 'not required',
   },
 } as const
 
