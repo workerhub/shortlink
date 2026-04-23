@@ -10,16 +10,22 @@
       "automerge": true
     },
     {
-      "matchPackagePatterns": ["^@cloudflare/"],
-      "groupName": "Cloudflare packages"
+      "groupName": "Cloudflare packages",
+      "matchPackageNames": [
+        "/^@cloudflare//"
+      ]
     },
     {
-      "matchPackagePatterns": ["^@simplewebauthn/"],
-      "groupName": "SimpleWebAuthn packages"
+      "groupName": "SimpleWebAuthn packages",
+      "matchPackageNames": [
+        "/^@simplewebauthn//"
+      ]
     },
     {
-      "matchPackagePatterns": ["^@tanstack/"],
-      "groupName": "TanStack packages"
+      "groupName": "TanStack packages",
+      "matchPackageNames": [
+        "/^@tanstack//"
+      ]
     }
   ]
 }
