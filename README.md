@@ -1,5 +1,7 @@
 # ShortLink
 
+[中文](./README.zh-CN.md)
+
 A self-hosted URL shortener built entirely on Cloudflare's platform. No servers to manage — runs on Workers, D1 (SQLite), and KV.
 
 ## Features
