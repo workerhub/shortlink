@@ -8,6 +8,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      TURBO_TELEMETRY_DISABLED: "1"
+      WRANGLER_SEND_METRICS: "false"
     steps:
       - uses: actions/checkout@v6.0.2
 
