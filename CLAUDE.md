@@ -63,8 +63,9 @@ pnpm build    # tsc + vite build (output: apps/web/dist/)
    # Create apps/worker/.dev.vars for local development:
    JWT_SECRET=your-random-string-32-chars-min
    TOTP_ENCRYPTION_KEY=<output of: openssl rand -hex 32>
-   RESEND_API_KEY=re_xxxxxxxxxxxx
+   SETUP_SECRET=local-setup-secret
    ```
+   Email provider credentials (Resend API key, SMTP settings) are configured via the **admin UI** after first login — not in `.dev.vars`.
 
 5. **Start both apps**
    ```bash
@@ -78,22 +79,24 @@ pnpm build    # tsc + vite build (output: apps/web/dist/)
 ## Project Structure
 
 ```
-go-cloudflare/
+shortlink/
 ├── apps/
 │   ├── worker/
 │   │   ├── src/
 │   │   │   ├── index.ts          # App entry: mounts routes, security headers, CORS, cron handler
 │   │   │   ├── types.ts          # Env, Variables, LinkRow, UserRow, CachedLink types
 │   │   │   ├── routes/
-│   │   │   │   ├── auth.ts       # All auth: register, login, logout, refresh, 2FA setup+verify, forgot/reset password
+│   │   │   │   ├── auth.ts       # All auth: register, login, logout, refresh, me, change-password, 2FA setup+verify, forgot/reset password
 │   │   │   │   ├── links.ts      # Link CRUD (user-scoped)
-│   │   │   │   ├── analytics.ts  # Per-link click analytics (D1 batch queries)
+│   │   │   │   ├── analytics.ts  # Per-link and summary click analytics (D1 batch queries)
 │   │   │   │   ├── admin.ts      # Admin: user mgmt, link mgmt, settings
-│   │   │   │   └── redirect.ts   # /:slug redirect + async click logging
+│   │   │   │   ├── redirect.ts   # /:slug redirect + async click logging
+│   │   │   │   └── setup.ts      # /setup/:secret — HTTP-triggered DB migration (schema_v1)
 │   │   │   ├── middleware/
 │   │   │   │   └── auth.ts       # requireAuth and requireAdmin middleware (JWT verification)
 │   │   │   └── lib/
 │   │   │       ├── crypto.ts     # PBKDF2 password hash/verify; AES-256-GCM encrypt/decrypt TOTP
+│   │   │       ├── db.ts         # tbl() helper: applies TABLE_PREFIX to all table names
 │   │   │       ├── jwt.ts        # issueTokenPair, verifyAccessToken, verifyRefreshToken
 │   │   │       ├── slug.ts       # generateSlug (rejection-sampling), isValidSlug, isReservedSlug, RESERVED_SLUGS
 │   │   │       ├── totp.ts       # TOTP generate/verify with otpauth library
@@ -103,19 +106,23 @@ go-cloudflare/
 │   │   │       ├── kv.ts         # All KV operations (link cache, challenge store, rate limiting)
 │   │   │       └── ua.ts         # User-agent parsing (device/browser/OS detection)
 │   │   ├── migrations/
-│   │   │   ├── 0001_init.sql     # Core schema: users, passkeys, links, click_logs, verifications, settings
-│   │   │   ├── 0002_audit_log.sql # audit_logs table
-│   │   │   ├── 0003_totp_used.sql # totp_used table (TOTP replay prevention); recreates audit_logs with nullable admin_id
-│   │   │   ├── 0004_smtp_settings.sql # email_provider + SMTP config rows
-│   │   │   └── 0005_email_settings.sql # resend_api_key, email_from_domain, email_from_name rows
+│   │   │   └── 0001_init.sql     # Canonical schema: all tables + default settings rows (used by wrangler d1 migrations apply)
 │   │   └── wrangler.toml
 │   └── web/
 │       └── src/
-│           ├── router.tsx
-│           ├── contexts/
-│           │   └── AuthContext.tsx  # BroadcastChannel cross-tab auth sync
+│           ├── App.tsx           # Root component: React Router route definitions
+│           ├── main.tsx
 │           ├── api/
-│           │   └── client.ts        # fetch wrapper with in-flight refresh dedup
+│           │   └── client.ts     # fetch wrapper with in-flight refresh dedup
+│           ├── contexts/
+│           │   ├── AppConfigContext.tsx  # Fetches /api/config (appName, registrationEnabled)
+│           │   ├── AuthContext.tsx       # BroadcastChannel cross-tab auth sync
+│           │   └── ThemeContext.tsx      # Dark/light theme management
+│           ├── i18n/
+│           │   ├── index.tsx            # i18n provider and useTranslation hook
+│           │   └── locales/
+│           │       ├── en.ts            # English strings
+│           │       └── zh-CN.ts         # Simplified Chinese strings
 │           └── pages/
 │               ├── auth/            # Login, Register, TwoFactor, ForgotPassword pages
 │               ├── dashboard/       # Links list, Analytics, Account Settings
@@ -151,14 +158,15 @@ Stored AES-256-GCM encrypted in D1. The encryption key (`TOTP_ENCRYPTION_KEY`) i
 
 | Prefix | Purpose | TTL |
 |---|---|---|
-| `link:{slug}` | Short link cache | 3600s |
+| `link:{slug}` | Short link cache | 21600s (6h) |
 | `passkey_challenge:{id}` | WebAuthn challenge | 300s |
 | `otp_rate:{email}` | Email OTP rate limit (also used by forgot-password) | 600s |
+| `login_attempts:{email}` | Login brute-force rate limit | 900s |
 | `2fa_attempts:{jti}` | General 2FA attempt counter | 600s |
 | `passkey_opts:{jti}` | Passkey options attempt counter | 600s |
 | `totp_confirm:{userId}` | TOTP setup confirm attempt counter | 120s |
 | `pending_2fa:{jti}` | Pending 2FA token payload | 600s |
-| `refresh_jti:{jti}` | Refresh token denylist | 7d |
+| `jti_deny:{jti}` | JTI denylist (refresh + access token revocation) | variable (token remaining TTL) |
 | `setting:{key}` | Settings cache (all keys incl. SMTP) | 60s |
 
 ### Redirect Flow (Critical Path)
@@ -174,6 +182,12 @@ GET /:slug
 
 ### Cross-Tab Auth Sync
 `AuthContext.tsx` opens a `BroadcastChannel('auth')` on mount. After login or token refresh, the new access token is broadcast to other tabs so they don't trigger redundant refresh requests.
+
+### App Config
+`AppConfigContext.tsx` fetches `GET /api/config` on mount and exposes `appName` and `registrationEnabled` to the entire frontend. Used to conditionally hide the Register link and display the correct app name.
+
+### Internationalization
+`i18n/` provides a lightweight provider and `useTranslation()` hook. Supported locales: English (`en`) and Simplified Chinese (`zh-CN`). Language preference is persisted in `localStorage`.
 
 ### Forgot Password Flow
 Two-step unauthenticated password reset via email:
@@ -202,12 +216,13 @@ For local development, put secrets in `apps/worker/.dev.vars` (gitignored).
 
 All set via the Cloudflare dashboard (Variables and Secrets). `keep_vars = true` prevents deployments from overwriting them.
 
-| Var | Description |
-|---|---|
-| `APP_URL` | Canonical origin (`https://yourdomain.com`) |
-| `APP_NAME` | Default app name (overridable in admin UI) |
-| `RP_ID` | WebAuthn relying party ID (domain only, no protocol) |
-| `APP_ORIGIN` | WebAuthn origin (full URL with protocol) |
+| Var | Required | Description |
+|---|---|---|
+| `APP_URL` | Yes | Canonical origin (`https://yourdomain.com`) |
+| `APP_NAME` | Yes | Default app name (overridable in admin UI) |
+| `RP_ID` | Yes | WebAuthn relying party ID (domain only, no protocol) |
+| `APP_ORIGIN` | Yes | WebAuthn origin (full URL with protocol) |
+| `TABLE_PREFIX` | No | Prefix for all D1 table names (e.g. `sl` → `sl_users`, `sl_links`, …). Default: empty (no prefix). Must be configured **before** running the setup route — changing it after initial setup requires renaming all tables manually. Only alphanumeric and underscore characters are used; all others are stripped. |
 
 Email sender config and API keys are managed in the **admin UI settings**, not here.
 
@@ -215,18 +230,17 @@ Email sender config and API keys are managed in the **admin UI settings**, not h
 
 ## Database Migrations
 
-Migrations are in `apps/worker/migrations/` and applied in order by `wrangler d1 migrations apply`.
+There are two migration paths:
 
-- `0001_init.sql` — all core tables
-- `0002_audit_log.sql` — audit_logs table
-- `0003_totp_used.sql` — totp_used table + **recreates audit_logs with nullable `admin_id`** (DATA LOSS: exports backup table first, see file comments)
-- `0004_smtp_settings.sql` — adds `email_provider`, `smtp_host`, `smtp_port`, `smtp_user`, `smtp_pass`, `smtp_from` settings rows
-- `0005_email_settings.sql` — adds `resend_api_key`, `email_from_domain`, `email_from_name` rows; these three env vars are now optional (admin UI takes priority)
+**`wrangler d1 migrations apply` (local dev):**
+One file in `apps/worker/migrations/`:
+- `0001_init.sql` — canonical schema: all tables (users, passkeys, links, click_logs, verifications, settings, audit_logs, totp_used) + default settings rows
 
-**Before applying 0003 to production**, export existing audit_logs:
-```bash
-wrangler d1 execute shortlink --command "SELECT * FROM audit_logs" --json > audit_logs_backup.json
-```
+**HTTP setup route (production):**
+`GET /setup/:secret` runs migrations embedded in `routes/setup.ts`. Currently one migration:
+- `schema_v1` — identical DDL as `0001_init.sql`, but parameterized by `TABLE_PREFIX` and tracked in `_schema_migrations` table
+
+Re-visiting the setup URL is safe — already-applied migrations return `"skipped"`.
 
 ---
 
@@ -237,6 +251,7 @@ wrangler d1 execute shortlink --command "SELECT * FROM audit_logs" --json > audi
 - Passkey registration capped at 10 per user
 - Forgot-password endpoint never reveals whether an email exists (always returns success)
 - Password reset codes: max 3 wrong attempts per code; rate-limited 3 sends per 10 min per email
+- Login brute-force limited to 10 attempts per 15-minute window per email (`login_attempts:{email}` KV)
 - `cf-connecting-ip` used for IP logging (cannot be forged); `x-forwarded-for` ignored
 - User-Agent and Referer headers truncated before storage (512 and 2048 bytes respectively)
 - `app_name` setting validated: 1–64 chars, no HTML-special or CR/LF characters
@@ -253,8 +268,8 @@ Two providers are supported, switchable via the `email_provider` setting in the 
 
 ### Resend (default)
 - Provider: `resend`
-- Configured via `RESEND_API_KEY` Worker secret and `EMAIL_FROM_NAME` / `EMAIL_FROM_DOMAIN` wrangler.toml vars
-- No database changes required
+- Configured via `resend_api_key`, `email_from_domain`, `email_from_name` settings in the admin UI (stored in D1, cached in KV for 60s)
+- No Worker secrets or wrangler.toml vars required
 
 ### Custom SMTP
 - Provider: `smtp`

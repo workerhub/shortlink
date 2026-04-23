@@ -87,7 +87,7 @@ export interface ClickLogRow {
 export interface VerificationRow {
   id: string
   identifier: string
-  type: 'email_otp'
+  type: 'email_otp' | 'password_reset' | 'email_verify'
   code_hash: string
   expires_at: number
   attempts: number

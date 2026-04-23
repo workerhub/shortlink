@@ -75,6 +75,7 @@ Go to [Cloudflare dashboard](https://dash.cloudflare.com) → **Workers & Pages 
 | `APP_NAME` | Variable | Yes | `ShortLink` — default app name, overridable in admin UI |
 | `RP_ID` | Variable | Yes | `yourdomain.com` — WebAuthn relying party ID (domain only) |
 | `APP_ORIGIN` | Variable | Yes | `https://yourdomain.com` — WebAuthn origin (full URL) |
+| `TABLE_PREFIX` | Variable | No | e.g. `sl` — prefixes all D1 table names (`sl_users`, `sl_links`, …). Must be set **before** running the setup route. Leave empty to use unprefixed names. |
 | `JWT_SECRET` | Secret | Yes | Any random string ≥ 32 chars |
 | `TOTP_ENCRYPTION_KEY` | Secret | Yes | `openssl rand -hex 32` |
 | `SETUP_SECRET` | Secret | Yes | `openssl rand -hex 24` — used to trigger migrations |
@@ -95,10 +96,7 @@ Response on success:
 ```json
 {
   "migrations": [
-    { "name": "0001_init", "status": "applied" },
-    { "name": "0002_audit_log", "status": "applied" },
-    { "name": "0003_totp_used", "status": "applied" },
-    { "name": "0004_smtp_settings", "status": "applied" }
+    { "name": "schema_v1", "status": "applied" }
   ]
 }
 ```
@@ -127,7 +125,6 @@ Navigate to your deployed URL and register — the first account is automaticall
 cat > apps/worker/.dev.vars << 'EOF'
 JWT_SECRET=dev-secret-at-least-32-characters-long
 TOTP_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000
-RESEND_API_KEY=re_test_xxxxxxxxxxxx
 SETUP_SECRET=local-setup-secret
 EOF
 
@@ -154,6 +151,11 @@ The Vite dev server proxies `/api` requests to `:8787` automatically.
 | POST | `/api/auth/login` | Login; returns tokens or 2FA challenge |
 | POST | `/api/auth/logout` | Revoke refresh token |
 | POST | `/api/auth/refresh` | Refresh access token |
+| GET | `/api/auth/me` | Get current user profile |
+| POST | `/api/auth/change-password` | Change password (authenticated) |
+| POST | `/api/auth/forgot-password` | Request password reset code via email |
+| POST | `/api/auth/verify-reset-code` | Verify password reset code (without consuming it) |
+| POST | `/api/auth/reset-password` | Complete password reset with code and new password |
 
 ### 2FA — Verification (requires `pendingToken` from login)
 
@@ -169,9 +171,13 @@ The Vite dev server proxies `/api` requests to `:8787` automatically.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/auth/2fa/totp/setup` | Get TOTP secret + QR URI |
+| GET | `/api/auth/2fa/totp/setup` | Get TOTP secret + QR URI |
 | POST | `/api/auth/2fa/totp/confirm` | Confirm and enable TOTP |
-| DELETE | `/api/auth/2fa/totp/disable` | Disable TOTP |
+| DELETE | `/api/auth/2fa/totp` | Disable TOTP |
+| POST | `/api/auth/2fa/email-otp/send-verify` | Send verification code to enable email OTP |
+| POST | `/api/auth/2fa/email-otp/enable` | Enable email OTP (with verification code) |
+| DELETE | `/api/auth/2fa/email-otp` | Disable email OTP |
+| GET | `/api/auth/2fa/passkey` | List registered passkeys |
 | POST | `/api/auth/2fa/passkey/register-options` | Get WebAuthn registration options |
 | POST | `/api/auth/2fa/passkey/register-verify` | Register passkey |
 | DELETE | `/api/auth/2fa/passkey/:id` | Remove passkey |
@@ -185,7 +191,13 @@ The Vite dev server proxies `/api` requests to `:8787` automatically.
 | GET | `/api/links/:id` | Get link details |
 | PUT | `/api/links/:id` | Update link |
 | DELETE | `/api/links/:id` | Delete link |
-| GET | `/api/links/:id/analytics` | Click analytics |
+
+### Analytics (requires authentication)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/analytics/summary` | Aggregated click stats across all user links (query: `days=30`) |
+| GET | `/api/analytics/:linkId` | Per-link click analytics |
 
 ### Admin (requires admin role)
 
@@ -193,12 +205,20 @@ The Vite dev server proxies `/api` requests to `:8787` automatically.
 |---|---|---|
 | GET | `/api/admin/stats` | Dashboard stats |
 | GET | `/api/admin/users` | List all users |
+| POST | `/api/admin/users` | Create user (admin-initiated) |
 | PATCH | `/api/admin/users/:id` | Update user role/status |
 | DELETE | `/api/admin/users/:id` | Delete user |
 | GET | `/api/admin/links` | List all links |
 | DELETE | `/api/admin/links/:id` | Delete any link |
 | GET | `/api/admin/settings` | Get global settings |
 | PUT | `/api/admin/settings` | Update global settings |
+
+### Miscellaneous
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/config` | Public app config (`appName`, `registrationEnabled`) |
+| GET | `/api/health` | Health check |
 
 ### Redirect
 
@@ -218,6 +238,7 @@ All variables and secrets are managed in the **Cloudflare dashboard** (Workers &
 | `APP_NAME` | Var | Yes | Default app name; overridable in admin UI |
 | `RP_ID` | Var | Yes | WebAuthn relying party ID (domain without protocol) |
 | `APP_ORIGIN` | Var | Yes | WebAuthn origin (full URL) |
+| `TABLE_PREFIX` | Var | No | Prefix for all D1 table names (e.g. `sl` → `sl_users`, `sl_links`, …). Set once before the first migration — changing it later requires manually renaming tables. Only alphanumeric and underscore characters are used. |
 | `JWT_SECRET` | Secret | Yes | HS256 signing key, ≥ 32 chars |
 | `TOTP_ENCRYPTION_KEY` | Secret | Yes | Hex string from `openssl rand -hex 32` |
 | `SETUP_SECRET` | Secret | Yes | Secret path for triggering DB migrations via HTTP |

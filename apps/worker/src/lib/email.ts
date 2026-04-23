@@ -1,6 +1,7 @@
 import type { Env } from '../types.js'
 import { getCachedSetting, setCachedSetting } from './kv.js'
 import { sendViaSMTP } from './smtp.js'
+import { tbl } from './db.js'
 
 interface EmailPayload {
   to: string
@@ -13,7 +14,7 @@ async function getSetting(env: Env, key: string): Promise<string> {
   const cached = await getCachedSetting(env.LINKS_KV, key)
   if (cached !== null) return cached
 
-  const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?1')
+  const row = await env.DB.prepare(`SELECT value FROM ${tbl(env, 'settings')} WHERE key = ?1`)
     .bind(key)
     .first<{ value: string }>()
   const value = row?.value ?? ''
