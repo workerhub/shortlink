@@ -31,39 +31,40 @@ A self-hosted URL shortener built entirely on Cloudflare's platform. No servers 
 ### Prerequisites
 
 - [Cloudflare account](https://dash.cloudflare.com)
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) (`npm install -g wrangler`)
-- Node.js ≥ 20 and pnpm ≥ 9
 
-### 1. Clone and install
+### 1. Fork this repository
 
-```bash
-git clone <repo>
-cd shortlink
-pnpm install
-```
+Fork this repository to your own account or organization.
 
 ### 2. Create Cloudflare resources
 
-```bash
-# Create D1 database
-wrangler d1 create shortlink
+Create the following resources in Cloudflare:
 
-# Create KV namespace
-wrangler kv namespace create LINKS_KV
-```
+| Resource | Name |
+|---|---|
+| D1 SQL databases | `shortlink` (customizable, default: `shortlink`) |
+| Workers KV | `LINKS_KV` |
 
-Note the IDs printed by each command — you will add them as GitHub Actions secrets in the next step.
+Note their IDs for the next step.
 
 ### 3. Add GitHub Actions secrets
 
 In your GitHub repository go to **Settings → Secrets and variables → Actions** and add:
 
+Repository secrets:
+
 | Secret | Value |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | API token created with the **Edit Cloudflare Workers** template |
+| `CLOUDFLARE_API_TOKEN` | API token created with the **Edit Cloudflare Workers** template from the [User API Tokens](https://dash.cloudflare.com/profile/api-tokens) page |
+
+Repository variables:
+
+| Variable | Value |
+|---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | Your account ID (visible in the Cloudflare dashboard URL) |
-| `D1_DATABASE_ID` | ID returned by `wrangler d1 create` |
-| `KV_NAMESPACE_ID` | ID returned by `wrangler kv namespace create` |
+| `D1_DATABASE_ID` | D1 database ID from the previous step |
+| `KV_NAMESPACE_ID` | Workers KV ID from the previous step |
+| `D1_DATABASE_NAME` | *(Optional)* D1 database name — defaults to `shortlink` if not set; if set, must match the name used in step 2 |
 
 The deploy workflow (`.github/workflows/deploy.yml`) injects these IDs into `wrangler.toml` at deploy time via `sed`, so no IDs are ever committed to the repository.
 
@@ -86,7 +87,13 @@ Go to [Cloudflare dashboard](https://dash.cloudflare.com) → **Workers & Pages 
 >
 > Email provider settings (Resend API key, SMTP credentials, etc.) are configured in the **admin UI** after first login — no Cloudflare dashboard config needed.
 
-### 4. Run database migrations
+### 4. Build and deploy
+
+Go to **GitHub Actions → Deploy** and click **Run workflow** to trigger deployment manually.
+
+This will deploy the code to Cloudflare Workers.
+
+### 5. Run database migrations
 
 After deploying, visit this URL once in your browser (or with `curl`):
 
@@ -104,15 +111,6 @@ Response on success:
 ```
 
 Re-visiting is safe — already-applied migrations return `"skipped"`. Run it again after future migrations are added.
-
-### 5. Build and deploy
-
-```bash
-# From the repo root
-pnpm deploy
-```
-
-This builds the frontend, then deploys the Worker with the SPA bundled as static assets.
 
 ### 6. First login
 

@@ -31,39 +31,40 @@
 ### 前置条件
 
 - [Cloudflare 账户](https://dash.cloudflare.com)
-- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)（`npm install -g wrangler`）
-- Node.js ≥ 20 且 pnpm ≥ 9
 
-### 1. 克隆并安装依赖
+### 1. Fork 本仓库
 
-```bash
-git clone <repo>
-cd shortlink
-pnpm install
-```
+把本仓库fork到自己账户/组织内。
 
 ### 2. 创建 Cloudflare 资源
 
-```bash
-# 创建 D1 数据库
-wrangler d1 create shortlink
+在Cloudflare中创建
 
-# 创建 KV 命名空间
-wrangler kv namespace create LINKS_KV
-```
+|资源|名称|
+|---|---|
+| D1 SQL databases | `shortlink` （可自定义，默认值`shortlink`） |
+| WORKERS KV | `LINKS_KV` |
 
-记下每条命令输出的 ID — 下一步将其添加为 GitHub Actions 密钥。
+记录其id备用
 
 ### 3. 添加 GitHub Actions 密钥
 
-在你的 GitHub 仓库中前往 **Settings → Secrets and variables → Actions** 并添加：
+在你的 GitHub 仓库中前往 **Settings → Secrets and variables → Actions** 
+
+添加Repository secrets：
 
 | 密钥 | 值 |
 |---|---|
-| `CLOUDFLARE_API_TOKEN` | 使用 **Edit Cloudflare Workers** 模板创建的 API 令牌 |
+| `CLOUDFLARE_API_TOKEN` | 进入[User API Tokens](https://dash.cloudflare.com/profile/api-tokens)页面，使用 **Edit Cloudflare Workers** 模板创建的 API 令牌 |
+
+
+添加Repository variables：
+| 变量 | 值 |
+|---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | 你的账户 ID（可在 Cloudflare 控制台 URL 中找到） |
-| `D1_DATABASE_ID` | `wrangler d1 create` 返回的 ID |
-| `KV_NAMESPACE_ID` | `wrangler kv namespace create` 返回的 ID |
+| `D1_DATABASE_ID` | 上一步中的 D1 database ID |
+| `KV_NAMESPACE_ID`| 上一步中的 WORKERS KV ID |
+| `D1_DATABASE_NAME` | （可选）D1 数据库名称，不设置则默认使用 `shortlink`，若设置须和上一步保持一致 |
 
 部署工作流（`.github/workflows/deploy.yml`）在部署时通过 `sed` 将这些 ID 注入 `wrangler.toml`，因此 ID 不会提交到仓库。
 
@@ -86,7 +87,15 @@ wrangler kv namespace create LINKS_KV
 >
 > 邮件提供商设置（Resend API 密钥、SMTP 凭据等）在首次登录后通过**管理界面**配置 — 无需在 Cloudflare 控制台中配置。
 
-### 4. 运行数据库迁移
+
+### 4. 构建并部署
+
+进入 Github Actions → Deploy →  点击 右侧 Run workflow，手动触发部署。
+
+这将会把代码部署到Cloudflare的Workers中。
+
+
+### 5. 运行数据库迁移
 
 部署后，在浏览器中访问以下 URL 一次（或使用 `curl`）：
 
@@ -104,15 +113,6 @@ https://your-worker.workers.dev/setup/<SETUP_SECRET>
 ```
 
 重复访问是安全的 — 已应用的迁移会返回 `"skipped"`。添加新迁移后再次运行即可。
-
-### 5. 构建并部署
-
-```bash
-# 从仓库根目录
-pnpm deploy
-```
-
-这将构建前端，然后将 Worker 与 SPA 一起作为静态资源部署。
 
 ### 6. 首次登录
 

@@ -13,7 +13,7 @@ run_worker_first = true
 
 [[d1_databases]]
 binding = "DB"
-database_name = "shortlink"
+database_name = "D1_DATABASE_NAME_PLACEHOLDER"
 database_id = "D1_DATABASE_ID_PLACEHOLDER"
 migrations_dir = "migrations"
 

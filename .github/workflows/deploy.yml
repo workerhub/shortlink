@@ -26,9 +26,10 @@ jobs:
 
       - name: Inject resource IDs
         run: |
-          sed -i "s/D1_DATABASE_ID_PLACEHOLDER/${{ secrets.D1_DATABASE_ID }}/g" apps/worker/wrangler.toml
-          sed -i "s/KV_NAMESPACE_ID_PLACEHOLDER/${{ secrets.KV_NAMESPACE_ID }}/g" apps/worker/wrangler.toml
-          sed -i "s/CLOUDFLARE_ACCOUNT_ID_PLACEHOLDER/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/g" apps/worker/wrangler.toml
+          sed -i "s/D1_DATABASE_ID_PLACEHOLDER/${{ vars.D1_DATABASE_ID }}/g" apps/worker/wrangler.toml
+          sed -i "s/D1_DATABASE_NAME_PLACEHOLDER/${{ vars.D1_DATABASE_NAME || 'shortlink' }}/g" apps/worker/wrangler.toml
+          sed -i "s/KV_NAMESPACE_ID_PLACEHOLDER/${{ vars.KV_NAMESPACE_ID }}/g" apps/worker/wrangler.toml
+          sed -i "s/CLOUDFLARE_ACCOUNT_ID_PLACEHOLDER/${{ vars.CLOUDFLARE_ACCOUNT_ID }}/g" apps/worker/wrangler.toml
 
       - name: Deploy
         run: pnpm run deploy
