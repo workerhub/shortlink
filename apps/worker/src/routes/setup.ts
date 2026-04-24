@@ -151,7 +151,8 @@ app.get('/:secret', async (c) => {
   }
 
   const prefix = c.env.TABLE_PREFIX ?? ''
-  const migrationsTable = tbl(prefix, '_schema_migrations')
+  const p = prefix.replace(/[^a-zA-Z0-9_]/g, '')
+  const migrationsTable = p ? `_${p}_schema_migrations` : '_schema_migrations'
 
   // Use prepare().run() for single-statement DDL — avoids exec()'s newline limitation
   await c.env.DB.prepare(
