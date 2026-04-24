@@ -38,14 +38,13 @@ Fork this repository to your own account or organization.
 
 ### 2. Create Cloudflare resources
 
-Create the following resources in Cloudflare:
+Create the following resources in Cloudflare, please note their IDs for the next step.
 
 | Resource | Name |
 |---|---|
-| D1 SQL databases | `shortlink` (customizable, default: `shortlink`) |
-| Workers KV | `LINKS_KV` |
+| Workers KV | `LINKS_KV` (customizable)|
+| D1 SQL databases | `shortlink` (customizable) |
 
-Note their IDs for the next step.
 
 ### 3. Add GitHub Actions secrets
 
@@ -62,9 +61,9 @@ Repository variables:
 | Variable | Value |
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | Your account ID (visible in the Cloudflare dashboard URL) |
-| `D1_DATABASE_ID` | D1 database ID from the previous step |
 | `KV_NAMESPACE_ID` | Workers KV ID from the previous step |
-| `D1_DATABASE_NAME` | *(Optional)* D1 database name — defaults to `shortlink` if not set; if set, must match the name used in step 2 |
+| `D1_DATABASE_ID` | D1 database ID from the previous step |
+| `D1_DATABASE_NAME` |(Configure as needed) If you customized the D1 database name in the previous step, you must configure it with the corresponding name; otherwise, no configuration is required |
 
 The deploy workflow (`.github/workflows/deploy.yml`) injects these IDs into `wrangler.toml` at deploy time via `sed`, so no IDs are ever committed to the repository.
 

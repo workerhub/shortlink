@@ -38,14 +38,13 @@
 
 ### 2. 创建 Cloudflare 资源
 
-在Cloudflare中创建
+在Cloudflare中创建如下资源，名称均可自定义，请记录id备用。
 
 |资源|名称|
 |---|---|
-| D1 SQL databases | `shortlink` （可自定义，默认值`shortlink`） |
-| WORKERS KV | `LINKS_KV` |
+| WORKERS KV | `LINKS_KV`（可自定义） |
+| D1 SQL databases | `shortlink`（可自定义） |
 
-记录其id备用
 
 ### 3. 添加 GitHub Actions 密钥
 
@@ -62,9 +61,10 @@
 | 变量 | 值 |
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | 你的账户 ID（可在 Cloudflare 控制台 URL 中找到） |
-| `D1_DATABASE_ID` | 上一步中的 D1 database ID |
 | `KV_NAMESPACE_ID`| 上一步中的 WORKERS KV ID |
-| `D1_DATABASE_NAME` | （可选）D1 数据库名称，不设置则默认使用 `shortlink`，若设置须和上一步保持一致 |
+| `D1_DATABASE_ID` | 上一步中的 D1 database ID |
+| `D1_DATABASE_NAME` | （按需配置）若上一步自定义配置了D1数据库名称，则须配置为对应名称，否则无须配置。 |
+
 
 部署工作流（`.github/workflows/deploy.yml`）在部署时通过 `sed` 将这些 ID 注入 `wrangler.toml`，因此 ID 不会提交到仓库。
 
