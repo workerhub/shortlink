@@ -68,7 +68,7 @@
 
 部署工作流（`.github/workflows/deploy.yml`）在部署时通过 `sed` 将这些 ID 注入 `wrangler.toml`，因此 ID 不会提交到仓库。
 
-### 3. 配置变量和密钥
+### 4. 配置变量和密钥
 
 前往 [Cloudflare 控制台](https://dash.cloudflare.com) → **Workers & Pages → shortlink → Settings → Variables and Secrets** 并添加：
 
@@ -88,14 +88,14 @@
 > 邮件提供商设置（Resend API 密钥、SMTP 凭据等）在首次登录后通过**管理界面**配置 — 无需在 Cloudflare 控制台中配置。
 
 
-### 4. 构建并部署
+### 5. 构建并部署
 
 进入 Github Actions → Deploy →  点击 右侧 Run workflow，手动触发部署。
 
 这将会把代码部署到Cloudflare的Workers中。
 
 
-### 5. 运行数据库迁移
+### 6. 运行数据库迁移
 
 部署后，在浏览器中访问以下 URL 一次（或使用 `curl`）：
 
@@ -114,7 +114,7 @@ https://your-worker.workers.dev/setup/<SETUP_SECRET>
 
 重复访问是安全的 — 已应用的迁移会返回 `"skipped"`。添加新迁移后再次运行即可。
 
-### 6. 首次登录
+### 7. 首次登录
 
 访问已部署的 URL 并注册 — 第一个账户将自动获得管理员角色，无论 `registration_enabled` 设置如何。然后前往 **Admin → Settings** 配置你的邮件提供商。
 
@@ -155,6 +155,8 @@ Vite 开发服务器会自动将 `/api` 请求代理到 `:8787`。
 | POST | `/api/auth/refresh` | 刷新访问令牌 |
 | GET | `/api/auth/me` | 获取当前用户信息 |
 | POST | `/api/auth/change-password` | 修改密码（需认证） |
+| POST | `/api/auth/verify-email` | 使用注册时发送的验证码验证邮箱地址 |
+| POST | `/api/auth/resend-verify-email` | 重新发送注册邮箱验证码 |
 | POST | `/api/auth/forgot-password` | 通过邮件请求密码重置码 |
 | POST | `/api/auth/verify-reset-code` | 验证密码重置码（不消耗） |
 | POST | `/api/auth/reset-password` | 使用重置码和新密码完成密码重置 |
@@ -252,11 +254,12 @@ GET /:slug  →  302 跳转到目标 URL
 | 键 | 值 | 描述 |
 |---|---|---|
 | `registration_enabled` | `true` / `false` | 允许新用户注册（默认：`false`） |
+| `require_email_verification` | `true` / `false` | 要求新用户在登录前验证其邮箱地址（默认：`false`） |
 | `app_name` | 字符串 | 覆盖显示的应用名称 |
 | `email_provider` | `resend` / `smtp` | 使用哪个邮件后端（默认：`resend`） |
-| `resend_api_key` | 字符串 | Resend API 密钥（覆盖 `RESEND_API_KEY` 环境变量） |
-| `email_from_domain` | 域名 | Resend 的发件人域名，例如 `example.com`（覆盖环境变量） |
-| `email_from_name` | 字符串 | Resend 的发件人显示名称（覆盖环境变量） |
+| `resend_api_key` | 字符串 | Resend API 密钥 |
+| `email_from_domain` | 域名 | Resend 的发件人域名，例如 `example.com` |
+| `email_from_name` | 字符串 | Resend 的发件人显示名称 |
 | `smtp_host` | 主机名 | SMTP 服务器主机名 |
 | `smtp_port` | `587` / `465` / … | SMTP 端口 — 465 为隐式 TLS，587 为 STARTTLS |
 | `smtp_from` | 邮件地址 | 发件人地址，例如 `noreply@example.com` |
