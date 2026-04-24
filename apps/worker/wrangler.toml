@@ -21,8 +21,5 @@ migrations_dir = "migrations"
 binding = "LINKS_KV"
 id = "KV_NAMESPACE_ID_PLACEHOLDER"
 
-[vars]
-TABLE_PREFIX = ""
-
 [triggers]
 crons = ["0 3 * * *"]
