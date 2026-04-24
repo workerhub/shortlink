@@ -151,7 +151,7 @@ app.get('/:secret', async (c) => {
   }
 
   const prefix = c.env.TABLE_PREFIX ?? ''
-  const migrationsTable = tbl(prefix, '_schema_migrations')
+  const migrationsTable = '_' + tbl(prefix, 'schema_migrations')
 
   // Use prepare().run() for single-statement DDL — avoids exec()'s newline limitation
   await c.env.DB.prepare(
