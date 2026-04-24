@@ -151,13 +151,14 @@ app.get('/:secret', async (c) => {
   }
 
   const prefix = c.env.TABLE_PREFIX ?? ''
+  const migrationsTable = tbl(prefix, '_schema_migrations')
 
   // Use prepare().run() for single-statement DDL — avoids exec()'s newline limitation
   await c.env.DB.prepare(
-    'CREATE TABLE IF NOT EXISTS _schema_migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL DEFAULT (unixepoch()))',
+    `CREATE TABLE IF NOT EXISTS ${migrationsTable} (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL DEFAULT (unixepoch()))`,
   ).run()
 
-  const { results } = await c.env.DB.prepare('SELECT name FROM _schema_migrations').all<{ name: string }>()
+  const { results } = await c.env.DB.prepare(`SELECT name FROM ${migrationsTable}`).all<{ name: string }>()
   const applied = new Set(results.map((r) => r.name))
 
   const log: { name: string; status: 'applied' | 'skipped' | 'error'; error?: string }[] = []
@@ -169,7 +170,7 @@ app.get('/:secret', async (c) => {
     }
     try {
       await c.env.DB.exec(toSingleLine(migration.sql))
-      await c.env.DB.prepare('INSERT INTO _schema_migrations (name) VALUES (?)').bind(migration.name).run()
+      await c.env.DB.prepare(`INSERT INTO ${migrationsTable} (name) VALUES (?)`).bind(migration.name).run()
       log.push({ name: migration.name, status: 'applied' })
     } catch (err) {
       log.push({ name: migration.name, status: 'error', error: String(err) })
