@@ -67,7 +67,7 @@ Repository variables:
 
 The deploy workflow (`.github/workflows/deploy.yml`) injects these IDs into `wrangler.toml` at deploy time via `sed`, so no IDs are ever committed to the repository.
 
-### 3. Configure variables and secrets
+### 4. Configure variables and secrets
 
 Go to [Cloudflare dashboard](https://dash.cloudflare.com) → **Workers & Pages → shortlink → Settings → Variables and Secrets** and add:
 
@@ -86,13 +86,13 @@ Go to [Cloudflare dashboard](https://dash.cloudflare.com) → **Workers & Pages 
 >
 > Email provider settings (Resend API key, SMTP credentials, etc.) are configured in the **admin UI** after first login — no Cloudflare dashboard config needed.
 
-### 4. Build and deploy
+### 5. Build and deploy
 
 Go to **GitHub Actions → Deploy** and click **Run workflow** to trigger deployment manually.
 
 This will deploy the code to Cloudflare Workers.
 
-### 5. Run database migrations
+### 6. Run database migrations
 
 After deploying, visit this URL once in your browser (or with `curl`):
 
@@ -111,7 +111,7 @@ Response on success:
 
 Re-visiting is safe — already-applied migrations return `"skipped"`. Run it again after future migrations are added.
 
-### 6. First login
+### 7. First login
 
 Navigate to your deployed URL and register — the first account is automatically granted admin role, regardless of the `registration_enabled` setting. Then go to **Admin → Settings** to configure your email provider.
 
@@ -152,6 +152,8 @@ The Vite dev server proxies `/api` requests to `:8787` automatically.
 | POST | `/api/auth/refresh` | Refresh access token |
 | GET | `/api/auth/me` | Get current user profile |
 | POST | `/api/auth/change-password` | Change password (authenticated) |
+| POST | `/api/auth/verify-email` | Verify email address with the code sent on registration |
+| POST | `/api/auth/resend-verify-email` | Resend the registration email verification code |
 | POST | `/api/auth/forgot-password` | Request password reset code via email |
 | POST | `/api/auth/verify-reset-code` | Verify password reset code (without consuming it) |
 | POST | `/api/auth/reset-password` | Complete password reset with code and new password |
@@ -249,11 +251,12 @@ All variables and secrets are managed in the **Cloudflare dashboard** (Workers &
 | Key | Values | Description |
 |---|---|---|
 | `registration_enabled` | `true` / `false` | Allow new user registration (default: `false`) |
+| `require_email_verification` | `true` / `false` | Require new users to verify their email before signing in (default: `false`) |
 | `app_name` | string | Override displayed app name |
 | `email_provider` | `resend` / `smtp` | Which email backend to use (default: `resend`) |
-| `resend_api_key` | string | Resend API key (overrides `RESEND_API_KEY` env var) |
-| `email_from_domain` | domain | Sender domain for Resend, e.g. `example.com` (overrides env var) |
-| `email_from_name` | string | Sender display name for Resend (overrides env var) |
+| `resend_api_key` | string | Resend API key |
+| `email_from_domain` | domain | Sender domain for Resend, e.g. `example.com` |
+| `email_from_name` | string | Sender display name for Resend |
 | `smtp_host` | hostname | SMTP server hostname |
 | `smtp_port` | `587` / `465` / … | SMTP port — 465 for implicit TLS, 587 for STARTTLS |
 | `smtp_from` | email address | Sender address, e.g. `noreply@example.com` |
