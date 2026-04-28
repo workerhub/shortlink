@@ -5,7 +5,8 @@ import { useAppConfig } from '@/contexts/AppConfigContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AuthCard } from '@/components/ui/auth-card'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n'
 
@@ -37,56 +38,54 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">{t('auth.signIn')}</CardTitle>
-          <CardDescription>{t('auth.signInDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1">
-              <Label htmlFor="email">{t('auth.email')}</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">{t('auth.password')}</Label>
-                <Link to="/forgot-password" className="text-xs text-primary hover:underline">
-                  {t('auth.forgotPassword')}
-                </Link>
-              </div>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            <Button type="submit" className="w-full" loading={loading}>
-              {t('auth.signIn')}
-            </Button>
-          </form>
-          {registrationEnabled && (
-            <p className="mt-4 text-center text-sm text-muted-foreground">
-              {t('auth.noAccount')}{' '}
-              <Link to="/register" className="text-primary hover:underline">
-                {t('auth.register')}
+    <AuthCard>
+      <CardHeader>
+        <CardTitle className="text-2xl">{t('auth.signIn')}</CardTitle>
+        <CardDescription>{t('auth.signInDesc')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="email">{t('auth.email')}</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">{t('auth.password')}</Label>
+              <Link to="/forgot-password" className="text-xs text-primary hover:underline">
+                {t('auth.forgotPassword')}
               </Link>
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+            </div>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </div>
+          <Button type="submit" className="w-full" loading={loading}>
+            {t('auth.signIn')}
+          </Button>
+        </form>
+        {registrationEnabled && (
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            {t('auth.noAccount')}{' '}
+            <Link to="/register" className="text-primary hover:underline">
+              {t('auth.register')}
+            </Link>
+          </p>
+        )}
+      </CardContent>
+    </AuthCard>
   )
 }

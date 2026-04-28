@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { authApi, setAccessToken } from '@/api/client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AuthCard } from '@/components/ui/auth-card'
+import { OtpInput } from '@/components/ui/otp-input'
 import { toast } from 'sonner'
 import { startAuthentication } from '@simplewebauthn/browser'
 import type { LoginResult } from '@/api/client'
@@ -101,99 +102,75 @@ export default function TwoFactorPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>{t('auth.twoFactor')}</CardTitle>
-          <CardDescription>{t('auth.twoFactorDesc')}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {tabs.length > 1 && (
-            <div className="flex gap-1 mb-6 border-b">
-              {tabs.map((t_) => (
-                <button
-                  key={t_}
-                  type="button"
-                  onClick={() => { setTab(t_); setCode(''); setOtpSent(false) }}
-                  className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                    tab === t_
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {tabLabels[t_]}
-                </button>
-              ))}
+    <AuthCard>
+      <CardHeader>
+        <CardTitle>{t('auth.twoFactor')}</CardTitle>
+        <CardDescription>{t('auth.twoFactorDesc')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {tabs.length > 1 && (
+          <div className="flex gap-1 mb-6 border-b">
+            {tabs.map((t_) => (
+              <button
+                key={t_}
+                type="button"
+                onClick={() => { setTab(t_); setCode(''); setOtpSent(false) }}
+                className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                  tab === t_
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tabLabels[t_]}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {tab === 'totp' && (
+          <form onSubmit={handleTotpVerify} className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="totp-code">{t('auth.sixDigitCode')}</Label>
+              <OtpInput id="totp-code" value={code} onChange={setCode} autoFocus />
             </div>
-          )}
+            <Button type="submit" className="w-full" loading={loading} disabled={code.length < 6}>
+              {t('auth.verify')}
+            </Button>
+          </form>
+        )}
 
-          {tab === 'totp' && (
-            <form onSubmit={handleTotpVerify} className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="totp-code">{t('auth.sixDigitCode')}</Label>
-                <Input
-                  id="totp-code"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  placeholder="000000"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                  autoComplete="one-time-code"
-                  autoFocus
-                />
-              </div>
-              <Button type="submit" className="w-full" loading={loading} disabled={code.length < 6}>
-                {t('auth.verify')}
+        {tab === 'email_otp' && (
+          <div className="space-y-4">
+            {!otpSent ? (
+              <Button className="w-full" onClick={handleEmailSend} loading={loading}>
+                {t('auth.sendCode')}
               </Button>
-            </form>
-          )}
-
-          {tab === 'email_otp' && (
-            <div className="space-y-4">
-              {!otpSent ? (
-                <Button className="w-full" onClick={handleEmailSend} loading={loading}>
-                  {t('auth.sendCode')}
+            ) : (
+              <form onSubmit={handleEmailVerify} className="space-y-4">
+                <div className="space-y-1">
+                  <Label htmlFor="email-code">{t('auth.sixDigitFromEmail')}</Label>
+                  <OtpInput id="email-code" value={code} onChange={setCode} autoFocus />
+                </div>
+                <Button type="submit" className="w-full" loading={loading} disabled={code.length < 6}>
+                  {t('auth.verify')}
                 </Button>
-              ) : (
-                <form onSubmit={handleEmailVerify} className="space-y-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="email-code">{t('auth.sixDigitFromEmail')}</Label>
-                    <Input
-                      id="email-code"
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]{6}"
-                      maxLength={6}
-                      placeholder="000000"
-                      value={code}
-                      onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                      autoComplete="one-time-code"
-                      autoFocus
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" loading={loading} disabled={code.length < 6}>
-                    {t('auth.verify')}
-                  </Button>
-                  <Button type="button" variant="ghost" className="w-full" onClick={handleEmailSend}>
-                    {t('auth.resendCode')}
-                  </Button>
-                </form>
-              )}
-            </div>
-          )}
+                <Button type="button" variant="ghost" className="w-full" onClick={handleEmailSend}>
+                  {t('auth.resendCode')}
+                </Button>
+              </form>
+            )}
+          </div>
+        )}
 
-          {tab === 'passkey' && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">{t('auth.passkeyDesc')}</p>
-              <Button className="w-full" onClick={handlePasskey} loading={loading}>
-                {t('auth.verifyWithPasskey')}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        {tab === 'passkey' && (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{t('auth.passkeyDesc')}</p>
+            <Button className="w-full" onClick={handlePasskey} loading={loading}>
+              {t('auth.verifyWithPasskey')}
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </AuthCard>
   )
 }

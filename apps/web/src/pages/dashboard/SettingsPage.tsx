@@ -10,6 +10,9 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
+import { OtpInput } from '@/components/ui/otp-input'
+import { ResendCodeButton } from '@/components/resend-code-button'
+import { useCountdown } from '@/hooks/use-countdown'
 import { toast } from 'sonner'
 import { startRegistration } from '@simplewebauthn/browser'
 import { Trash2, Plus, Shield, Mail, Key } from 'lucide-react'
@@ -293,17 +296,7 @@ function TotpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['user']
                 {t('settings.manualSecret')} <span className="font-mono">{setupData.secret}</span>
               </p>
               <form onSubmit={confirmSetup} className="space-y-3">
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  placeholder="000000"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                  autoFocus
-                  autoComplete="one-time-code"
-                />
+                <OtpInput value={code} onChange={setCode} autoFocus />
                 <Button type="submit" className="w-full" loading={loading} disabled={code.length < 6}>
                   {t('settings.confirm')}
                 </Button>
@@ -460,23 +453,17 @@ function EmailOtpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['us
   const [showEnableDialog, setShowEnableDialog] = useState(false)
   const [codeSent, setCodeSent] = useState(false)
   const [verifyCode, setVerifyCode] = useState('')
-  const [countdown, setCountdown] = useState(0)
+  const { countdown, start: startCountdown } = useCountdown()
   const [disablePassword, setDisablePassword] = useState('')
   const [showDisableDialog, setShowDisableDialog] = useState(false)
   const enabled = !!user?.email_2fa_enabled
-
-  useEffect(() => {
-    if (countdown <= 0) return
-    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000)
-    return () => clearTimeout(timer)
-  }, [countdown])
 
   const sendVerifyCode = async () => {
     setLoading(true)
     try {
       await authApi.emailOtpSendVerify()
       setCodeSent(true)
-      setCountdown(600)
+      startCountdown(600)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to send code')
     } finally {
@@ -505,7 +492,7 @@ function EmailOtpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['us
     setShowEnableDialog(false)
     setCodeSent(false)
     setVerifyCode('')
-    setCountdown(0)
+    startCountdown(0)
   }
 
   const disable = async () => {
@@ -565,21 +552,14 @@ function EmailOtpCard({ user, onUpdate }: { user: ReturnType<typeof useAuth>['us
             </div>
           ) : (
             <form onSubmit={enable} className="space-y-4">
-              <Input
-                type="text"
-                inputMode="numeric"
-                placeholder={t('auth.sixDigitFromEmail')}
+              <OtpInput
                 value={verifyCode}
-                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ''))}
-                maxLength={6}
+                onChange={setVerifyCode}
                 autoFocus
-                autoComplete="one-time-code"
+                placeholder={t('auth.sixDigitFromEmail')}
               />
               <p className="text-xs text-muted-foreground">
-                {countdown > 0
-                  ? t('auth.resendCodeIn', { seconds: String(countdown) })
-                  : <button type="button" className="text-primary hover:underline" onClick={sendVerifyCode} disabled={loading}>{t('auth.resendCode')}</button>
-                }
+                <ResendCodeButton countdown={countdown} onResend={sendVerifyCode} loading={loading} />
               </p>
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={closeEnableDialog}>{t('common.cancel')}</Button>

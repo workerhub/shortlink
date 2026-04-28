@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { authApi } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { AuthCard } from '@/components/ui/auth-card'
+import { OtpInput } from '@/components/ui/otp-input'
+import { ResendCodeButton } from '@/components/resend-code-button'
+import { useCountdown } from '@/hooks/use-countdown'
 import { toast } from 'sonner'
 import { useTranslation } from '@/i18n'
 
@@ -19,17 +23,11 @@ export default function ForgotPasswordPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [countdown, setCountdown] = useState(0)
+  const { countdown, start: startCountdown } = useCountdown()
 
-  useEffect(() => {
-    if (countdown <= 0) return
-    const timer = setTimeout(() => setCountdown((c) => c - 1), 1000)
-    return () => clearTimeout(timer)
-  }, [countdown])
-
-  // Step 1: submit email — always advance, never surface errors (no user enumeration)
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Shared: send/resend reset code — always silent, never surfaces errors (no user enumeration)
+  const sendCode = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     setLoading(true)
     try {
       await authApi.forgotPassword(email)
@@ -38,7 +36,8 @@ export default function ForgotPasswordPage() {
     } finally {
       setLoading(false)
     }
-    setCountdown(600)
+    setCode('')
+    startCountdown(600)
     setStep('code')
   }
 
@@ -54,20 +53,6 @@ export default function ForgotPasswordPage() {
     } finally {
       setLoading(false)
     }
-  }
-
-  // Resend code (resets countdown)
-  const handleResend = async () => {
-    setLoading(true)
-    try {
-      await authApi.forgotPassword(email)
-    } catch {
-      // Silently ignore
-    } finally {
-      setLoading(false)
-    }
-    setCode('')
-    setCountdown(600)
   }
 
   // Step 3: set new password
@@ -91,134 +76,110 @@ export default function ForgotPasswordPage() {
 
   if (step === 'password') {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader>
-            <CardTitle className="text-2xl">{t('auth.newPasswordTitle')}</CardTitle>
-            <CardDescription>{t('auth.newPasswordDesc')}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <Label>{t('settings.newPassword')}</Label>
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-                <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
-              </div>
-              <div className="space-y-1">
-                <Label>{t('settings.confirmPassword')}</Label>
-                <Input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                />
-              </div>
-              <Button type="submit" className="w-full" loading={loading}>
-                {t('auth.resetPassword')}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
+      <AuthCard>
+        <CardHeader>
+          <CardTitle className="text-2xl">{t('auth.newPasswordTitle')}</CardTitle>
+          <CardDescription>{t('auth.newPasswordDesc')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <Label>{t('settings.newPassword')}</Label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
+            </div>
+            <div className="space-y-1">
+              <Label>{t('settings.confirmPassword')}</Label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+              />
+            </div>
+            <Button type="submit" className="w-full" loading={loading}>
+              {t('auth.resetPassword')}
+            </Button>
+          </form>
+        </CardContent>
+      </AuthCard>
     )
   }
 
   if (step === 'code') {
     return (
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <Card className="w-full max-w-sm">
-          <CardHeader>
-            <CardTitle className="text-2xl">{t('auth.forgotPasswordTitle')}</CardTitle>
-            <CardDescription>
-              {t('auth.resetCodeSentTo', { email })}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-4">{t('auth.codeValidFor')}</p>
-            <form onSubmit={handleCodeSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <Label>{t('auth.resetCode')}</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder={t('auth.resetCodePlaceholder')}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  autoFocus
-                />
-              </div>
-              <Button type="submit" className="w-full" loading={loading}>
-                {t('auth.verifyCode')}
-              </Button>
-            </form>
-            <p className="mt-4 text-center text-sm text-muted-foreground">
-              {countdown > 0 ? (
-                t('auth.resendCodeIn', { seconds: String(countdown) })
-              ) : (
-                <button
-                  type="button"
-                  className="text-primary hover:underline"
-                  onClick={handleResend}
-                  disabled={loading}
-                >
-                  {t('auth.resendCode')}
-                </button>
-              )}
-            </p>
-            <p className="mt-2 text-center text-sm text-muted-foreground">
-              <Link to="/login" className="text-primary hover:underline">
-                {t('auth.backToLogin')}
-              </Link>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-sm">
+      <AuthCard>
         <CardHeader>
           <CardTitle className="text-2xl">{t('auth.forgotPasswordTitle')}</CardTitle>
-          <CardDescription>{t('auth.forgotPasswordDesc')}</CardDescription>
+          <CardDescription>{t('auth.resetCodeSentTo', { email })}</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
+          <p className="text-xs text-muted-foreground mb-4">{t('auth.codeValidFor')}</p>
+          <form onSubmit={handleCodeSubmit} className="space-y-4">
             <div className="space-y-1">
-              <Label>{t('auth.email')}</Label>
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
+              <Label>{t('auth.resetCode')}</Label>
+              <OtpInput
+                value={code}
+                onChange={setCode}
+                autoFocus
+                placeholder={t('auth.resetCodePlaceholder')}
               />
             </div>
             <Button type="submit" className="w-full" loading={loading}>
-              {t('auth.sendResetCode')}
+              {t('auth.verifyCode')}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
+            <ResendCodeButton countdown={countdown} onResend={sendCode} loading={loading} />
+          </p>
+          <p className="mt-2 text-center text-sm text-muted-foreground">
             <Link to="/login" className="text-primary hover:underline">
               {t('auth.backToLogin')}
             </Link>
           </p>
         </CardContent>
-      </Card>
-    </div>
+      </AuthCard>
+    )
+  }
+
+  return (
+    <AuthCard>
+      <CardHeader>
+        <CardTitle className="text-2xl">{t('auth.forgotPasswordTitle')}</CardTitle>
+        <CardDescription>{t('auth.forgotPasswordDesc')}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={sendCode} className="space-y-4">
+          <div className="space-y-1">
+            <Label>{t('auth.email')}</Label>
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
+          </div>
+          <Button type="submit" className="w-full" loading={loading}>
+            {t('auth.sendResetCode')}
+          </Button>
+        </form>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          <Link to="/login" className="text-primary hover:underline">
+            {t('auth.backToLogin')}
+          </Link>
+        </p>
+      </CardContent>
+    </AuthCard>
   )
 }
