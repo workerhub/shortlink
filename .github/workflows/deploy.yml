@@ -12,11 +12,11 @@ jobs:
       TURBO_TELEMETRY_DISABLED: "1"
       WRANGLER_SEND_METRICS: "false"
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6.0.3
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v6.4.0
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
